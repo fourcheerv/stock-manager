@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-// Configuration CouchDB
-const COUCHDB_URL = "https://access:4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD@couchdb.monproprecloud.fr/bobinos";
+// Configuration CouchDB - Encodage correct des caractères spéciaux
+const COUCHDB_USER = "access";
+const COUCHDB_PASSWORD = encodeURIComponent("4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD");
+const COUCHDB_HOST = "couchdb.monproprecloud.fr";
+const COUCHDB_DB = "bobinos";
+const COUCHDB_URL = `https://${COUCHDB_USER}:${COUCHDB_PASSWORD}@${COUCHDB_HOST}/${COUCHDB_DB}`;
 
 export default function StockManager() {
   const [products, setProducts] = useState([]);
