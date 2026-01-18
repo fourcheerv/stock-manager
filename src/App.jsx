@@ -634,13 +634,13 @@ export default function StockManager() {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">{editingId ? 'Modifier le produit' : 'Ajouter un produit'}</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit (Bobino)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit</label>
                 <select 
                   value={productForm.name} 
                   onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} 
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
-                  <option value="">Sélectionner une laize</option>
+                  <option value="">Sélectionner un produit</option>
                   {productTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
