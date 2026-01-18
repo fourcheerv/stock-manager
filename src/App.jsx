@@ -2,12 +2,85 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-// Configuration CouchDB - Encodage correct des caractères spéciaux
-const COUCHDB_USER = "access";
-const COUCHDB_PASSWORD = encodeURIComponent("4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD");
-const COUCHDB_HOST = "couchdb.monproprecloud.fr";
-const COUCHDB_DB = "bobinos";
-const COUCHDB_URL = `https://${COUCHDB_USER}:${COUCHDB_PASSWORD}@${COUCHDB_HOST}/${COUCHDB_DB}`;
+// Configuration CouchDB avec authentification Basic
+const COUCHDB_USER = 'access';
+const COUCHDB_PASSWORD = '4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD';
+const COUCHDB_HOST = 'https://couchdb.monproprecloud.fr';
+const COUCHDB_DB = 'bobinos';
+const COUCHDB_URL = `${COUCHDB_HOST}/${COUCHDB_DB}`;
+
+// Authentification Basic
+const getAuthHeaders = () => {
+  const credentials = btoa(`${COUCHDB_USER}:${COUCHDB_PASSWORD}`);
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Basic ${credentials}`
+  };
+};
+
+// Initialisation IndexedDB
+const DB_NAME = 'StockManager';
+const DB_VERSION = 1;
+const PRODUCTS_STORE = 'products';
+const MOVEMENTS_STORE = 'movements';
+
+const initIndexedDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(PRODUCTS_STORE)) {
+        db.createObjectStore(PRODUCTS_STORE, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(MOVEMENTS_STORE)) {
+        db.createObjectStore(MOVEMENTS_STORE, { keyPath: 'id' });
+      }
+    };
+  });
+};
+
+const saveToIndexedDB = async (data, storeName) => {
+  try {
+    const db = await initIndexedDB();
+    const transaction = db.transaction([storeName], 'readwrite');
+    const store = transaction.objectStore(storeName);
+    
+    if (Array.isArray(data)) {
+      store.clear();
+      data.forEach(item => store.add(item));
+    } else {
+      store.put(data);
+    }
+    
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (error) {
+    console.error(`Erreur sauvegarde IndexedDB (${storeName}):`, error);
+  }
+};
+
+const loadFromIndexedDB = async (storeName) => {
+  try {
+    const db = await initIndexedDB();
+    const transaction = db.transaction([storeName], 'readonly');
+    const store = transaction.objectStore(storeName);
+    const request = store.getAll();
+    
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.error(`Erreur chargement IndexedDB (${storeName}):`, error);
+    return [];
+  }
+};
 
 export default function StockManager() {
   const [products, setProducts] = useState([]);
@@ -35,31 +108,35 @@ export default function StockManager() {
   const productTypes = ['Laize 80', 'Laize 120', 'Laize 160'];
   const COLORS = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-  // Charger les données depuis localStorage au démarrage
+  // Charger les données depuis IndexedDB au démarrage
   useEffect(() => {
-    loadDataFromLocal();
-    syncWithCouchDB();
+    const initializeApp = async () => {
+      await loadDataFromIndexedDB();
+      await syncWithCouchDB();
+    };
+    
+    initializeApp();
     const interval = setInterval(() => syncWithCouchDB(), 30000); // Sync toutes les 30 secondes
     return () => clearInterval(interval);
   }, []);
 
-  const loadDataFromLocal = () => {
+  const loadDataFromIndexedDB = async () => {
     try {
-      const savedProducts = localStorage.getItem('products');
-      const savedMovements = localStorage.getItem('movements');
-      if (savedProducts) setProducts(JSON.parse(savedProducts));
-      if (savedMovements) setMovements(JSON.parse(savedMovements));
+      const productsData = await loadFromIndexedDB(PRODUCTS_STORE);
+      const movementsData = await loadFromIndexedDB(MOVEMENTS_STORE);
+      setProducts(productsData || []);
+      setMovements(movementsData || []);
     } catch (error) {
-      console.error('Erreur chargement local:', error);
+      console.error('Erreur chargement IndexedDB:', error);
     }
   };
 
-  const saveToLocal = (productsData, movementsData) => {
+  const saveToIndexedDBLocal = async (productsData, movementsData) => {
     try {
-      localStorage.setItem('products', JSON.stringify(productsData || products));
-      localStorage.setItem('movements', JSON.stringify(movementsData || movements));
+      await saveToIndexedDB(productsData || products, PRODUCTS_STORE);
+      await saveToIndexedDB(movementsData || movements, MOVEMENTS_STORE);
     } catch (error) {
-      console.error('Erreur sauvegarde locale:', error);
+      console.error('Erreur sauvegarde IndexedDB:', error);
     }
   };
 
@@ -68,7 +145,10 @@ export default function StockManager() {
       setSyncStatus('syncing');
       
       // Récupérer toutes les données de CouchDB
-      const response = await fetch(`${COUCHDB_URL}/_all_docs?include_docs=true`);
+      const response = await fetch(`${COUCHDB_URL}/_all_docs?include_docs=true`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
       if (!response.ok) throw new Error('Erreur sync');
       
       const data = await response.json();
@@ -88,7 +168,7 @@ export default function StockManager() {
       if (productsData.length > 0 || movementsData.length > 0) {
         setProducts(productsData);
         setMovements(movementsData);
-        saveToLocal(productsData, movementsData);
+        await saveToIndexedDBLocal(productsData, movementsData);
       }
       
       setSyncStatus('synced');
@@ -106,7 +186,10 @@ export default function StockManager() {
       // Vérifier si le document existe
       let existingDoc;
       try {
-        const checkResponse = await fetch(`${COUCHDB_URL}/${_id}`);
+        const checkResponse = await fetch(`${COUCHDB_URL}/${_id}`, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        });
         if (checkResponse.ok) {
           existingDoc = await checkResponse.json();
         }
@@ -123,7 +206,7 @@ export default function StockManager() {
 
       const response = await fetch(`${COUCHDB_URL}/${_id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(docToSave)
       });
 
@@ -139,12 +222,16 @@ export default function StockManager() {
   const deleteFromCouchDB = async (docType, docId) => {
     try {
       const _id = `${docType}_${docId}`;
-      const response = await fetch(`${COUCHDB_URL}/${_id}`);
+      const response = await fetch(`${COUCHDB_URL}/${_id}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
       if (!response.ok) return;
       
       const doc = await response.json();
       await fetch(`${COUCHDB_URL}/${_id}?rev=${doc._rev}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
     } catch (error) {
       console.error('Erreur suppression CouchDB:', error);
@@ -292,7 +379,7 @@ export default function StockManager() {
       }
       
       setProducts(updatedProducts);
-      saveToLocal(updatedProducts, movements);
+      await saveToIndexedDBLocal(updatedProducts, movements);
       await saveToCouchDB(productToSave, 'product', productToSave.id);
       setProductForm({ name: '', currentStock: '', minStock: '' });
     }
@@ -309,7 +396,7 @@ export default function StockManager() {
     
     setProducts(updatedProducts);
     setMovements(updatedMovements);
-    saveToLocal(updatedProducts, updatedMovements);
+    await saveToIndexedDBLocal(updatedProducts, updatedMovements);
     
     await deleteFromCouchDB('product', id);
     const movementsToDelete = movements.filter(m => m.productId === id);
@@ -364,7 +451,7 @@ export default function StockManager() {
       }
       
       setMovements(updatedMovements);
-      saveToLocal(updatedProducts, updatedMovements);
+      await saveToIndexedDBLocal(updatedProducts, updatedMovements);
       await saveToCouchDB(movementToSave, 'movement', movementToSave.id);
       
       setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '' });
