@@ -93,6 +93,7 @@ export default function StockManager() {
   const [showStats, setShowStats] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced', 'syncing', 'error'
+  const [useCustomProductName, setUseCustomProductName] = useState(false);
   
   const [productForm, setProductForm] = useState({
     name: '',
@@ -512,11 +513,13 @@ export default function StockManager() {
       await saveToIndexedDBLocal(updatedProducts, movements);
       await saveToCouchDB(productToSave, 'product', productToSave.id);
       setProductForm({ name: '', currentStock: '', minStock: '' });
+      setUseCustomProductName(false);
     }
   };
 
   const handleEditProduct = (product) => {
     setEditingId(product.id);
+    setUseCustomProductName(false);
     setProductForm({ name: product.name, currentStock: product.currentStock, minStock: product.minStock });
   };
 
@@ -817,17 +820,41 @@ export default function StockManager() {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">{editingId ? 'Modifier le produit' : 'Ajouter un produit'}</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit</label>
-                <select 
-                  value={productForm.name} 
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} 
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">Sélectionner un produit</option>
-                  {productTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nom du produit</label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <select 
+                      value={useCustomProductName ? '' : productForm.name} 
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setProductForm({ ...productForm, name: e.target.value });
+                          setUseCustomProductName(false);
+                        }
+                      }} 
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="">Sélectionner un produit</option>
+                      {productTypes.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    <button 
+                      onClick={() => setUseCustomProductName(!useCustomProductName)}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${useCustomProductName ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      {useCustomProductName ? '✓ Nouveau' : '+ Nouveau'}
+                    </button>
+                  </div>
+                  {useCustomProductName && (
+                    <input 
+                      type="text" 
+                      value={productForm.name} 
+                      onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} 
+                      className="w-full px-4 py-2 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-indigo-50" 
+                      placeholder="Nom du nouveau produit"
+                    />
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stock actuel</label>
@@ -842,7 +869,7 @@ export default function StockManager() {
                 {editingId ? 'Mettre à jour' : 'Ajouter le produit'}
               </button>
               {editingId && (
-                <button onClick={() => { setEditingId(null); setProductForm({ name: '', currentStock: '', minStock: '' }); }} className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Annuler</button>
+                <button onClick={() => { setEditingId(null); setProductForm({ name: '', currentStock: '', minStock: '' }); setUseCustomProductName(false); }} className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Annuler</button>
               )}
             </div>
           </div>
