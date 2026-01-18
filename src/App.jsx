@@ -611,13 +611,13 @@ export default function StockManager() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-3">
-            <Package className="w-10 h-10 text-indigo-600" />
-            <h1 className="text-4xl font-bold text-gray-800">Gestion de Stock</h1>
-            <div className="ml-4 flex items-center gap-2">
+            <Package className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-600" />
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-800">Gestion de Stock</h1>
+            <div className="hidden sm:flex ml-4 items-center gap-2">
               {syncStatus === 'synced' && (
                 <div className="flex items-center gap-1 text-green-600 text-sm">
                   <Wifi className="w-4 h-4" />
@@ -638,10 +638,33 @@ export default function StockManager() {
               )}
             </div>
           </div>
-          <button onClick={() => setShowStats(!showStats)} className="bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium">
-            <BarChart3 className="w-5 h-5" />
-            {showStats ? 'Masquer' : 'Voir'} Statistiques
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <div className="flex sm:hidden items-center gap-2">
+              {syncStatus === 'synced' && (
+                <div className="flex items-center gap-1 text-green-600 text-sm">
+                  <Wifi className="w-4 h-4" />
+                  <span>Synchronisé</span>
+                </div>
+              )}
+              {syncStatus === 'syncing' && (
+                <div className="flex items-center gap-1 text-blue-600 text-sm">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Synchronisation...</span>
+                </div>
+              )}
+              {syncStatus === 'error' && (
+                <div className="flex items-center gap-1 text-red-600 text-sm">
+                  <WifiOff className="w-4 h-4" />
+                  <span>Hors ligne</span>
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowStats(!showStats)} className="bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 font-medium whitespace-nowrap w-full sm:w-auto">
+              <BarChart3 className="w-5 h-5" />
+              <span className="sm:hidden">{showStats ? 'Masquer' : 'Voir'}</span>
+              <span className="hidden sm:inline">{showStats ? 'Masquer' : 'Voir'} Statistiques</span>
+            </button>
+          </div>
         </div>
 
         {showStats && movements.length > 0 && (
