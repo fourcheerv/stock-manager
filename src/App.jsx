@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import PouchDB from 'pouchdb';
 
-// Configuration PouchDB
-const localDB = new PouchDB("bobinos");
-const remoteDB = new PouchDB("https://access:4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD@couchdb.monproprecloud.fr/bobinos");
+// Configuration CouchDB - Encodage correct des caractères spéciaux
+const COUCHDB_USER = "access";
+const COUCHDB_PASSWORD = encodeURIComponent("4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD");
+const COUCHDB_HOST = "couchdb.monproprecloud.fr";
+const COUCHDB_DB = "bobinos";
+const COUCHDB_URL = `https://${COUCHDB_USER}:${COUCHDB_PASSWORD}@${COUCHDB_HOST}/${COUCHDB_DB}`;
 
 export default function StockManager() {
   const [products, setProducts] = useState([]);
@@ -33,83 +35,119 @@ export default function StockManager() {
   const productTypes = ['Laize 80', 'Laize 120', 'Laize 160'];
   const COLORS = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
-  // Charger les données depuis PouchDB au démarrage
+  // Charger les données depuis localStorage au démarrage
   useEffect(() => {
-    loadDataFromDB();
-    setupSync();
+    loadDataFromLocal();
+    syncWithCouchDB();
+    const interval = setInterval(() => syncWithCouchDB(), 30000); // Sync toutes les 30 secondes
+    return () => clearInterval(interval);
   }, []);
 
-  const loadDataFromDB = async () => {
+  const loadDataFromLocal = () => {
     try {
-      const result = await localDB.allDocs({ include_docs: true });
+      const savedProducts = localStorage.getItem('products');
+      const savedMovements = localStorage.getItem('movements');
+      if (savedProducts) setProducts(JSON.parse(savedProducts));
+      if (savedMovements) setMovements(JSON.parse(savedMovements));
+    } catch (error) {
+      console.error('Erreur chargement local:', error);
+    }
+  };
+
+  const saveToLocal = (productsData, movementsData) => {
+    try {
+      localStorage.setItem('products', JSON.stringify(productsData || products));
+      localStorage.setItem('movements', JSON.stringify(movementsData || movements));
+    } catch (error) {
+      console.error('Erreur sauvegarde locale:', error);
+    }
+  };
+
+  const syncWithCouchDB = async () => {
+    try {
+      setSyncStatus('syncing');
+      
+      // Récupérer toutes les données de CouchDB
+      const response = await fetch(`${COUCHDB_URL}/_all_docs?include_docs=true`);
+      if (!response.ok) throw new Error('Erreur sync');
+      
+      const data = await response.json();
       const productsData = [];
       const movementsData = [];
 
-      result.rows.forEach(row => {
-        if (row.doc.type === 'product') {
-          productsData.push(row.doc);
-        } else if (row.doc.type === 'movement') {
-          movementsData.push(row.doc);
+      data.rows.forEach(row => {
+        if (row.doc && !row.id.startsWith('_')) {
+          if (row.doc.type === 'product') {
+            productsData.push(row.doc);
+          } else if (row.doc.type === 'movement') {
+            movementsData.push(row.doc);
+          }
         }
       });
 
-      setProducts(productsData);
-      setMovements(movementsData);
+      if (productsData.length > 0 || movementsData.length > 0) {
+        setProducts(productsData);
+        setMovements(movementsData);
+        saveToLocal(productsData, movementsData);
+      }
+      
+      setSyncStatus('synced');
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
-    }
-  };
-
-  const setupSync = () => {
-    // Synchronisation bidirectionnelle continue
-    localDB.sync(remoteDB, {
-      live: true,
-      retry: true
-    }).on('change', (info) => {
-      console.log('Changement détecté:', info);
-      setSyncStatus('syncing');
-      loadDataFromDB();
-      setTimeout(() => setSyncStatus('synced'), 1000);
-    }).on('error', (err) => {
-      console.error('Erreur de synchronisation:', err);
+      console.error('Erreur synchronisation:', error);
       setSyncStatus('error');
-    });
-  };
-
-  const saveProductToDB = async (product) => {
-    try {
-      const doc = { ...product, type: 'product', _id: `product_${product.id}` };
-      await localDB.put(doc);
-    } catch (error) {
-      if (error.status === 409) {
-        const existing = await localDB.get(`product_${product.id}`);
-        await localDB.put({ ...doc, _rev: existing._rev });
-      } else {
-        console.error('Erreur sauvegarde produit:', error);
-      }
     }
   };
 
-  const saveMovementToDB = async (movement) => {
+  const saveToCouchDB = async (doc, docType, docId) => {
     try {
-      const doc = { ...movement, type: 'movement', _id: `movement_${movement.id}` };
-      await localDB.put(doc);
-    } catch (error) {
-      if (error.status === 409) {
-        const existing = await localDB.get(`movement_${movement.id}`);
-        await localDB.put({ ...doc, _rev: existing._rev });
-      } else {
-        console.error('Erreur sauvegarde mouvement:', error);
+      setSyncStatus('syncing');
+      const _id = `${docType}_${docId}`;
+      
+      // Vérifier si le document existe
+      let existingDoc;
+      try {
+        const checkResponse = await fetch(`${COUCHDB_URL}/${_id}`);
+        if (checkResponse.ok) {
+          existingDoc = await checkResponse.json();
+        }
+      } catch (e) {
+        // Document n'existe pas
       }
+
+      const docToSave = {
+        ...doc,
+        _id,
+        type: docType,
+        ...(existingDoc && { _rev: existingDoc._rev })
+      };
+
+      const response = await fetch(`${COUCHDB_URL}/${_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(docToSave)
+      });
+
+      if (!response.ok) throw new Error('Erreur sauvegarde');
+      
+      setTimeout(() => setSyncStatus('synced'), 1000);
+    } catch (error) {
+      console.error('Erreur sauvegarde CouchDB:', error);
+      setSyncStatus('error');
     }
   };
 
-  const deleteFromDB = async (id, type) => {
+  const deleteFromCouchDB = async (docType, docId) => {
     try {
-      const doc = await localDB.get(`${type}_${id}`);
-      await localDB.remove(doc);
+      const _id = `${docType}_${docId}`;
+      const response = await fetch(`${COUCHDB_URL}/${_id}`);
+      if (!response.ok) return;
+      
+      const doc = await response.json();
+      await fetch(`${COUCHDB_URL}/${_id}?rev=${doc._rev}`, {
+        method: 'DELETE'
+      });
     } catch (error) {
-      console.error('Erreur suppression:', error);
+      console.error('Erreur suppression CouchDB:', error);
     }
   };
 
@@ -242,18 +280,20 @@ export default function StockManager() {
   const handleAddProduct = async () => {
     if (productForm.name && productForm.currentStock && productForm.minStock) {
       let updatedProducts;
+      let productToSave;
+      
       if (editingId) {
         updatedProducts = products.map(p => p.id === editingId ? { ...p, name: productForm.name, currentStock: Number(productForm.currentStock), minStock: Number(productForm.minStock) } : p);
-        setProducts(updatedProducts);
-        const productToSave = updatedProducts.find(p => p.id === editingId);
-        await saveProductToDB(productToSave);
+        productToSave = updatedProducts.find(p => p.id === editingId);
         setEditingId(null);
       } else {
-        const newProduct = { id: Date.now(), name: productForm.name, currentStock: Number(productForm.currentStock), minStock: Number(productForm.minStock) };
-        updatedProducts = [...products, newProduct];
-        setProducts(updatedProducts);
-        await saveProductToDB(newProduct);
+        productToSave = { id: Date.now(), name: productForm.name, currentStock: Number(productForm.currentStock), minStock: Number(productForm.minStock) };
+        updatedProducts = [...products, productToSave];
       }
+      
+      setProducts(updatedProducts);
+      saveToLocal(updatedProducts, movements);
+      await saveToCouchDB(productToSave, 'product', productToSave.id);
       setProductForm({ name: '', currentStock: '', minStock: '' });
     }
   };
@@ -264,12 +304,17 @@ export default function StockManager() {
   };
 
   const handleDeleteProduct = async (id) => {
-    setProducts(products.filter(p => p.id !== id));
-    setMovements(movements.filter(m => m.productId !== id));
-    await deleteFromDB(id, 'product');
+    const updatedProducts = products.filter(p => p.id !== id);
+    const updatedMovements = movements.filter(m => m.productId !== id);
+    
+    setProducts(updatedProducts);
+    setMovements(updatedMovements);
+    saveToLocal(updatedProducts, updatedMovements);
+    
+    await deleteFromCouchDB('product', id);
     const movementsToDelete = movements.filter(m => m.productId === id);
     for (const movement of movementsToDelete) {
-      await deleteFromDB(movement.id, 'movement');
+      await deleteFromCouchDB('movement', movement.id);
     }
   };
 
@@ -280,17 +325,20 @@ export default function StockManager() {
         alert('Quantité insuffisante en stock !');
         return;
       }
+      
       const newStock = selectedProduct.currentStock - qty;
       const updatedProducts = products.map(p => p.id === selectedProduct.id ? { ...p, currentStock: newStock } : p);
       setProducts(updatedProducts);
       
       const productToSave = updatedProducts.find(p => p.id === selectedProduct.id);
-      await saveProductToDB(productToSave);
+      await saveToCouchDB(productToSave, 'product', productToSave.id);
       
       const existingMovementIndex = movements.findIndex(m => m.intendedFor === movementForm.intendedFor && m.productId === selectedProduct.id);
+      let updatedMovements;
+      let movementToSave;
       
       if (existingMovementIndex !== -1) {
-        const updatedMovements = [...movements];
+        updatedMovements = [...movements];
         updatedMovements[existingMovementIndex] = {
           ...updatedMovements[existingMovementIndex],
           quantity: updatedMovements[existingMovementIndex].quantity + qty,
@@ -299,10 +347,9 @@ export default function StockManager() {
           destockedBy: movementForm.destockedBy,
           updated: true
         };
-        setMovements(updatedMovements);
-        await saveMovementToDB(updatedMovements[existingMovementIndex]);
+        movementToSave = updatedMovements[existingMovementIndex];
       } else {
-        const newMovement = {
+        movementToSave = {
           id: Date.now(),
           productId: selectedProduct.id,
           productName: selectedProduct.name,
@@ -313,9 +360,13 @@ export default function StockManager() {
           time: new Date().toLocaleTimeString('fr-FR'),
           updated: false
         };
-        setMovements([...movements, newMovement]);
-        await saveMovementToDB(newMovement);
+        updatedMovements = [...movements, movementToSave];
       }
+      
+      setMovements(updatedMovements);
+      saveToLocal(updatedProducts, updatedMovements);
+      await saveToCouchDB(movementToSave, 'movement', movementToSave.id);
+      
       setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '' });
       setShowMovementForm(false);
       setSelectedProduct(null);
