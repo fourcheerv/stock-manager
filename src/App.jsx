@@ -793,7 +793,7 @@ export default function StockManager() {
                         <div><span className="font-medium">Destiné à:</span> {movement.intendedFor}</div>
                         <div><span className="font-medium">Date:</span> {movement.date} {movement.time}</div>
                         {movement.theoreticalWithdrawalDate && (
-                          <div><span className="font-medium">Date théorique:</span> {movement.theoreticalWithdrawalDate}</div>
+                          <div><span className="font-medium">Date théorique de retrait:</span> {movement.theoreticalWithdrawalDate}</div>
                         )}
                         <div className="flex items-center gap-1">
                           <span className="font-medium">Retrait:</span>
