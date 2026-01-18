@@ -14,10 +14,10 @@ Application web moderne de gestion de stock avec suivi des mouvements, alertes d
 ### Déstockage Intelligent
 - 📉 Déstockage avec sélection de la personne responsable
 - 👥 Liste prédéfinie des personnes autorisées :
-  - Hiane Benamar
-  - Franck Vendeur
-  - Fabien Richard
-  - Frédéric Antoine
+  - User1
+  - User2
+  - User3
+  - User4
 - 🎯 Suivi du destinataire pour chaque mouvement
 - 🔄 **Mise à jour automatique** : Si un même destinataire reprend le même produit, la quantité s'additionne automatiquement
 - 🚫 Contrôle des quantités disponibles
@@ -151,15 +151,11 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 
 Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
-## 👨‍💻 Auteur
-
-Votre Nom - [@votre-username](https://github.com/votre-username)
 
 ## 📞 Support
 
 Pour toute question ou problème :
 - Ouvrir une [issue](https://github.com/votre-username/stock-manager/issues)
-- Contacter par email : votre-email@example.com
 
 ---
 
