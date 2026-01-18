@@ -29,12 +29,17 @@
   destockedBy: 'Hiane Benamar'|'Franck Vendeur'|'Fabien Richard'|'Frédéric Antoine', 
   intendedFor: string, 
   date: 'DD/MM/YYYY', 
-  time: 'HH:MM:SS', 
+  time: 'HH:MM:SS',
+  theoreticalWithdrawalDate: 'YYYY-MM-DD' (optional),
+  withdrawn: boolean,
   updated: boolean 
 }
 ```
 - **Key pattern**: If same `intendedFor` AND `productId` exist, quantities are summed and marked `updated: true`
 - Dates stored in French locale format (`toLocaleDateString('fr-FR')`)
+- **New fields** (v2.0):
+  - `theoreticalWithdrawalDate`: Expected withdrawal date picker (format: YYYY-MM-DD)
+  - `withdrawn`: Boolean flag indicating if recipient has confirmed withdrawal (default: false)
 
 ### Sync Pattern: localStorage → CouchDB
 
@@ -67,8 +72,8 @@ await saveToCouchDB(productToSave, 'product', productToSave.id);
 2. Modal shows existing destinations for that product (to enable quantity aggregation)
 3. Validate: quantity ≤ currentStock, all required fields filled
 4. Check for existing movement: `movements.find(m => m.intendedFor === form.intendedFor && m.productId === product.id)`
-   - If exists: add quantity, set `updated: true`, update timestamp
-   - If new: create movement object with `updated: false`
+   - If exists: add quantity, set `updated: true`, update timestamp, **update `theoreticalWithdrawalDate` and `withdrawn` status**
+   - If new: create movement object with `updated: false`, **set `theoreticalWithdrawalDate` (optional) and `withdrawn: false`**
 5. Update product stock: `currentStock -= quantity`
 6. Sync both product and movement to CouchDB
 7. Clear form and close modal
@@ -76,7 +81,8 @@ await saveToCouchDB(productToSave, 'product', productToSave.id);
 ### Statistics & Export
 - Filter movements by year: split `date` (DD/MM/YYYY) on `/[2]` for year
 - Aggregate by destination, product, or destocker (destockedBy person)
-- Export to CSV: aggregate movements by recipient+product+year, include move count and last update date
+- **NEW**: Withdrawal stats via `getWithdrawalStats(year)` - returns {total, withdrawn, pending}
+- Export to CSV: aggregate movements by recipient+product+year, include move count, last update date, **theoretical withdrawal date, and withdrawal confirmation status**
 - CSV includes BOM (`\uFEFF`) for proper UTF-8 encoding in Excel
 - Use double-quote escaping for fields containing commas
 

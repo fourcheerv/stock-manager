@@ -102,7 +102,9 @@ export default function StockManager() {
   const [movementForm, setMovementForm] = useState({
     quantity: '',
     destockedBy: 'Hiane Benamar',
-    intendedFor: ''
+    intendedFor: '',
+    theoreticalWithdrawalDate: '',
+    withdrawn: false
   });
 
   const destockers = ['Hiane Benamar', 'Franck Vendeur', 'Fabien Richard', 'Frédéric Antoine'];
@@ -260,6 +262,14 @@ export default function StockManager() {
     return Object.entries(stats).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   };
 
+  const getWithdrawalStats = (year) => {
+    const yearMovements = getMovementsByYear(year);
+    const total = yearMovements.length;
+    const withdrawn = yearMovements.filter(m => m.withdrawn).length;
+    const pending = total - withdrawn;
+    return { total, withdrawn, pending };
+  };
+
   const exportToExcel = () => {
     if (movements.length === 0) {
       alert('Aucune donnée à exporter');
@@ -283,7 +293,9 @@ export default function StockManager() {
             totalQty: 0,
             moveCount: 0,
             lastDate: m.date,
-            destocker: m.destockedBy
+            destocker: m.destockedBy,
+            withdrawn: m.withdrawn ? 'Oui' : 'Non',
+            theoreticalDate: m.theoreticalWithdrawalDate || 'N/A'
           };
         }
         aggregatedData[key].totalQty += m.quantity;
@@ -295,6 +307,8 @@ export default function StockManager() {
         if (currentDate > savedDate) {
           aggregatedData[key].lastDate = m.date;
           aggregatedData[key].destocker = m.destockedBy;
+          aggregatedData[key].withdrawn = m.withdrawn ? 'Oui' : 'Non';
+          aggregatedData[key].theoreticalDate = m.theoreticalWithdrawalDate || 'N/A';
         }
       });
       Object.values(aggregatedData).forEach(data => exportData.push(data));
@@ -305,7 +319,7 @@ export default function StockManager() {
       return a.recipient.localeCompare(b.recipient);
     });
     
-    const headers = ['Annee', 'Destinataire', 'Produit', 'Quantite_Totale', 'Nombre_Mouvements', 'Derniere_Date', 'Destocke_Par'];
+    const headers = ['Annee', 'Destinataire', 'Produit', 'Quantite_Totale', 'Nombre_Mouvements', 'Derniere_Date', 'Date_Theorique_Retrait', 'Retrait_Confirme', 'Destocke_Par'];
     const csvRows = [headers.join(',')];
     
     exportData.forEach(row => {
@@ -316,6 +330,8 @@ export default function StockManager() {
         row.totalQty,
         row.moveCount,
         row.lastDate,
+        row.theoreticalDate,
+        row.withdrawn,
         `"${row.destocker.replace(/"/g, '""')}"`
       ].join(',');
       csvRows.push(csvRow);
@@ -407,6 +423,8 @@ export default function StockManager() {
           date: new Date().toLocaleDateString('fr-FR'),
           time: new Date().toLocaleTimeString('fr-FR'),
           destockedBy: movementForm.destockedBy,
+          theoreticalWithdrawalDate: movementForm.theoreticalWithdrawalDate,
+          withdrawn: movementForm.withdrawn,
           updated: true
         };
         movementToSave = updatedMovements[existingMovementIndex];
@@ -420,6 +438,8 @@ export default function StockManager() {
           intendedFor: movementForm.intendedFor,
           date: new Date().toLocaleDateString('fr-FR'),
           time: new Date().toLocaleTimeString('fr-FR'),
+          theoreticalWithdrawalDate: movementForm.theoreticalWithdrawalDate,
+          withdrawn: movementForm.withdrawn,
           updated: false
         };
         updatedMovements = [...movements, movementToSave];
@@ -438,7 +458,7 @@ export default function StockManager() {
   const openDestockForm = (product) => {
     setSelectedProduct(product);
     setShowMovementForm(true);
-    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '' });
+    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false });
   };
 
   const getExistingDestinations = (productId) => {
@@ -448,7 +468,7 @@ export default function StockManager() {
   const cancelDestock = () => {
     setShowMovementForm(false);
     setSelectedProduct(null);
-    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '' });
+    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false });
   };
 
   return (
@@ -575,14 +595,34 @@ export default function StockManager() {
               </div>
 
               <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">Top Déstockeurs</h3>
-                <div className="space-y-2">
-                  {getStatsByDestocker(selectedYear).slice(0, 5).map((item, index) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="font-medium text-gray-700">{item.name}</span>
-                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">{item.value}</span>
-                    </div>
-                  ))}
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Statut des Retraits</h3>
+                <div className="space-y-3">
+                  {(() => {
+                    const stats = getWithdrawalStats(selectedYear);
+                    const percentageWithdrawn = stats.total > 0 ? Math.round((stats.withdrawn / stats.total) * 100) : 0;
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Total:</span>
+                          <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-medium">{stats.total}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-green-700">Confirmés:</span>
+                          <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">{stats.withdrawn}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-yellow-700">En attente:</span>
+                          <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">{stats.pending}</span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full" style={{ width: `${percentageWithdrawn}%` }}></div>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-2 text-center">{percentageWithdrawn}% des retraits confirmés</p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -705,6 +745,20 @@ export default function StockManager() {
                     {destockers.map((name) => (<option key={name} value={name}>{name}</option>))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date théorique de retrait</label>
+                  <input type="date" value={movementForm.theoreticalWithdrawalDate} onChange={(e) => setMovementForm({ ...movementForm, theoreticalWithdrawalDate: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+                </div>
+                <div className="flex items-center gap-3 bg-indigo-50 p-3 rounded-lg">
+                  <input 
+                    type="checkbox" 
+                    id="withdrawn" 
+                    checked={movementForm.withdrawn} 
+                    onChange={(e) => setMovementForm({ ...movementForm, withdrawn: e.target.checked })} 
+                    className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="withdrawn" className="text-sm font-medium text-gray-700 cursor-pointer">Retrait confirmé par le destinataire</label>
+                </div>
                 <div className="flex gap-3">
                   <button onClick={handleDestock} className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">Valider</button>
                   <button onClick={cancelDestock} className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors font-medium">Annuler</button>
@@ -734,10 +788,19 @@ export default function StockManager() {
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
                         <div><span className="font-medium">Déstocké par:</span> {movement.destockedBy}</div>
                         <div><span className="font-medium">Destiné à:</span> {movement.intendedFor}</div>
                         <div><span className="font-medium">Date:</span> {movement.date} {movement.time}</div>
+                        {movement.theoreticalWithdrawalDate && (
+                          <div><span className="font-medium">Date théorique:</span> {movement.theoreticalWithdrawalDate}</div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">Retrait:</span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${movement.withdrawn ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {movement.withdrawn ? '✓ Confirmé' : 'En attente'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
