@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { getAllDocs, getDoc, saveDoc, deleteDoc } from './couchdbProxy';
 
 // Configuration CouchDB avec authentification Basic
 const COUCHDB_USER = 'access';
@@ -144,14 +145,8 @@ export default function StockManager() {
     try {
       setSyncStatus('syncing');
       
-      // Récupérer toutes les données de CouchDB
-      const response = await fetch(`${COUCHDB_URL}/_all_docs?include_docs=true`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-      if (!response.ok) throw new Error('Erreur sync');
-      
-      const data = await response.json();
+      // Récupérer toutes les données de CouchDB via le proxy
+      const data = await getAllDocs();
       const productsData = [];
       const movementsData = [];
 
@@ -186,13 +181,7 @@ export default function StockManager() {
       // Vérifier si le document existe
       let existingDoc;
       try {
-        const checkResponse = await fetch(`${COUCHDB_URL}/${_id}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        if (checkResponse.ok) {
-          existingDoc = await checkResponse.json();
-        }
+        existingDoc = await getDoc(_id);
       } catch (e) {
         // Document n'existe pas
       }
@@ -204,14 +193,7 @@ export default function StockManager() {
         ...(existingDoc && { _rev: existingDoc._rev })
       };
 
-      const response = await fetch(`${COUCHDB_URL}/${_id}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(docToSave)
-      });
-
-      if (!response.ok) throw new Error('Erreur sauvegarde');
-      
+      await saveDoc(docToSave);
       setTimeout(() => setSyncStatus('synced'), 1000);
     } catch (error) {
       console.error('Erreur sauvegarde CouchDB:', error);
@@ -222,17 +204,10 @@ export default function StockManager() {
   const deleteFromCouchDB = async (docType, docId) => {
     try {
       const _id = `${docType}_${docId}`;
-      const response = await fetch(`${COUCHDB_URL}/${_id}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-      if (!response.ok) return;
+      const doc = await getDoc(_id);
+      if (!doc) return;
       
-      const doc = await response.json();
-      await fetch(`${COUCHDB_URL}/${_id}?rev=${doc._rev}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
+      await deleteDoc(_id, doc._rev);
     } catch (error) {
       console.error('Erreur suppression CouchDB:', error);
     }
