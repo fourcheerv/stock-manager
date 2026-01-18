@@ -535,6 +535,27 @@ export default function StockManager() {
     }
   };
 
+  const handleClearMovements = async () => {
+    if (movements.length === 0) {
+      alert('Aucun mouvement à supprimer');
+      return;
+    }
+    
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer les ${movements.length} mouvements ? Cette action est irréversible.`);
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    setMovements([]);
+    await saveToIndexedDBLocal(products, []);
+    
+    // Supprimer tous les mouvements de CouchDB
+    for (const movement of movements) {
+      await deleteFromCouchDB('movement', movement.id);
+    }
+  };
+
   const handleDestock = async () => {
     if (selectedProduct && movementForm.quantity && movementForm.destockedBy && movementForm.intendedFor) {
       const qty = Number(movementForm.quantity);
@@ -931,7 +952,15 @@ export default function StockManager() {
         )}
 
         <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Historique des mouvements ({movements.length})</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Historique des mouvements ({movements.length})</h2>
+            {movements.length > 0 && (
+              <button onClick={handleClearMovements} className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 font-medium whitespace-nowrap w-full sm:w-auto justify-center sm:justify-start">
+                <Trash2 className="w-5 h-5" />
+                <span>Vider l'historique</span>
+              </button>
+            )}
+          </div>
           {movements.length === 0 ? (
             <p className="text-gray-500 text-center py-8">Aucun mouvement de stock enregistré</p>
           ) : (
