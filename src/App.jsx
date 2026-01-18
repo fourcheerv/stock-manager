@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
+import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import jsPDF from 'jspdf';
 import { getAllDocs, getDoc, saveDoc, deleteDoc } from './couchdbProxy';
 
 // Configuration CouchDB avec authentification Basic
@@ -353,6 +354,144 @@ export default function StockManager() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     }, 100);
+  };
+
+  const generateBonDeSortie = (movement) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Configuration des styles
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+
+    // Couleur principale (indigo)
+    const primaryColor = [79, 70, 229]; // rgb(79, 70, 229)
+    const textColor = [31, 41, 55]; // rgb(31, 41, 55)
+
+    // En-tête
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+
+    // Titre
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('BON DE SORTIE', margin, 15);
+
+    // Numéro du bon
+    doc.setTextColor(...primaryColor);
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text(`N° ${movement.id}`, pageWidth - margin - 40, 20);
+
+    // Contenu principal
+    let yPosition = 45;
+    const lineHeight = 8;
+    const labelWidth = 50;
+    const valueX = margin + labelWidth + 5;
+
+    doc.setTextColor(...textColor);
+    doc.setFontSize(11);
+
+    // Informations du mouvement
+    doc.setFont(undefined, 'bold');
+    doc.text('Informations du mouvement', margin, yPosition);
+    yPosition += lineHeight + 2;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+
+    // Destinataire
+    doc.setFont(undefined, 'bold');
+    doc.text('Destinataire:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.text(movement.intendedFor, valueX, yPosition);
+    yPosition += lineHeight;
+
+    // Produit
+    doc.setFont(undefined, 'bold');
+    doc.text('Produit:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.text(movement.productName, valueX, yPosition);
+    yPosition += lineHeight;
+
+    // Quantité
+    doc.setFont(undefined, 'bold');
+    doc.text('Quantité:', margin, yPosition);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(220, 38, 38); // Couleur rouge pour la quantité
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(`${movement.quantity} unité${movement.quantity > 1 ? 's' : ''}`, valueX, yPosition);
+    
+    yPosition += lineHeight + 3;
+    doc.setTextColor(...textColor);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+
+    // Date de retrait théorique
+    if (movement.theoreticalWithdrawalDate) {
+      doc.setFont(undefined, 'bold');
+      doc.text('Date théorique de retrait:', margin, yPosition);
+      doc.setFont(undefined, 'normal');
+      
+      // Formater la date
+      const dateObj = new Date(movement.theoreticalWithdrawalDate + 'T00:00:00');
+      const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      
+      doc.text(formattedDate, valueX, yPosition);
+      yPosition += lineHeight + 3;
+    }
+
+    // Séparatrice
+    doc.setDrawColor(...primaryColor);
+    yPosition += 3;
+    doc.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 6;
+
+    // Section confirmations
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(11);
+    doc.text('Confirmations', margin, yPosition);
+    yPosition += lineHeight + 2;
+
+    // Cases à cocher
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+
+    // Case destinataire à apposer sa signature
+    doc.rect(margin, yPosition - 2, 4, 4);
+    doc.text('Destinataire à composer sa signature', margin + 6, yPosition);
+    yPosition += lineHeight + 1;
+
+    // Case retrait confirmé
+    if (movement.withdrawn) {
+      doc.setTextColor(34, 197, 94); // Vert
+      doc.text('✓', margin + 2, yPosition - 2);
+      doc.setTextColor(...textColor);
+    }
+    doc.rect(margin, yPosition - 2, 4, 4);
+    doc.text('Retrait confirmé', margin + 6, yPosition);
+
+    // Pied de page
+    yPosition = pageHeight - 20;
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128); // Gris
+    doc.text('Stock Manager - ' + new Date().toLocaleDateString('fr-FR'), pageWidth / 2, yPosition, { align: 'center' });
+    doc.text(`Généré le ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, yPosition + 5, { align: 'center' });
+
+    // Télécharger le PDF
+    const timestamp = new Date().toISOString().split('T')[0];
+    doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
   };
 
   const handleAddProduct = async () => {
@@ -803,6 +942,9 @@ export default function StockManager() {
                         </div>
                       </div>
                     </div>
+                    <button onClick={() => generateBonDeSortie(movement)} className="text-green-600 hover:text-green-700 hover:bg-green-50 p-2 rounded-lg transition-colors ml-4 flex-shrink-0" title="Générer bon de sortie">
+                      <Download className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               ))}
