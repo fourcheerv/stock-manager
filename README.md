@@ -155,7 +155,7 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 ## 📞 Support
 
 Pour toute question ou problème :
-- Ouvrir une [issue](https://github.com/votre-username/stock-manager/issues)
+- Ouvrir une [issue](https://github.com/fourcheerv/stock-manager/issues)
 
 ---
 
