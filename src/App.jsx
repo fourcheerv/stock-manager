@@ -110,7 +110,7 @@ export default function StockManager() {
   });
 
   const destockers = ['Hiane Benamar', 'Franck Vendeur', 'Fabien Richard', 'Frédéric Antoine'];
-  const productTypes = ['Laize 80', 'Laize 120', 'Laize 160'];
+  const productTypes = ['Bobino Laize 80', 'Bobino Laize 120', 'Bobino Laize 160'];
   const COLORS = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 
   // Charger les données depuis IndexedDB au démarrage
