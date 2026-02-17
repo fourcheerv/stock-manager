@@ -106,8 +106,12 @@ export default function StockManager() {
     destockedBy: 'Hiane Benamar',
     intendedFor: '',
     theoreticalWithdrawalDate: '',
-    withdrawn: false
+    withdrawn: false,
+    email: ''
   });
+
+  const [editingMovementId, setEditingMovementId] = useState(null);
+  const [editingMovement, setEditingMovement] = useState(null);
 
   const destockers = ['Hiane Benamar', 'Franck Vendeur', 'Fabien Richard', 'Frédéric Antoine'];
   const productTypes = ['Bobino Laize 80', 'Bobino Laize 120', 'Bobino Laize 160'];
@@ -506,6 +510,20 @@ export default function StockManager() {
 
         yPosition += lineHeight + 6;
 
+        // Email si disponible
+        if (movement.email) {
+          doc.setFont(undefined, 'bold');
+          doc.setFontSize(9);
+          doc.text('Email du destinataire:', margin, yPosition);
+          doc.setFont(undefined, 'normal');
+          doc.setTextColor([66, 133, 244]); // Bleu pour email
+          doc.text(movement.email, margin + col1Width * 0.3, yPosition);
+          doc.setTextColor(...textColor);
+          yPosition += lineHeight + 4;
+        }
+
+        yPosition += 2;
+
         // ===== SECTION SIGNATURES =====
         doc.setDrawColor(...lightGray);
         doc.setLineWidth(0.4);
@@ -653,18 +671,18 @@ export default function StockManager() {
         alert('Quantité insuffisante en stock !');
         return;
       }
-      
+
       const newStock = selectedProduct.currentStock - qty;
       const updatedProducts = products.map(p => p.id === selectedProduct.id ? { ...p, currentStock: newStock } : p);
       setProducts(updatedProducts);
-      
+
       const productToSave = updatedProducts.find(p => p.id === selectedProduct.id);
       await saveToCouchDB(productToSave, 'product', productToSave.id);
-      
+
       const existingMovementIndex = movements.findIndex(m => m.intendedFor === movementForm.intendedFor && m.productId === selectedProduct.id);
       let updatedMovements;
       let movementToSave;
-      
+
       if (existingMovementIndex !== -1) {
         updatedMovements = [...movements];
         updatedMovements[existingMovementIndex] = {
@@ -675,6 +693,7 @@ export default function StockManager() {
           destockedBy: movementForm.destockedBy,
           theoreticalWithdrawalDate: movementForm.theoreticalWithdrawalDate,
           withdrawn: movementForm.withdrawn,
+          email: movementForm.email,
           updated: true
         };
         movementToSave = updatedMovements[existingMovementIndex];
@@ -690,16 +709,17 @@ export default function StockManager() {
           time: new Date().toLocaleTimeString('fr-FR'),
           theoreticalWithdrawalDate: movementForm.theoreticalWithdrawalDate,
           withdrawn: movementForm.withdrawn,
+          email: movementForm.email,
           updated: false
         };
         updatedMovements = [...movements, movementToSave];
       }
-      
+
       setMovements(updatedMovements);
       await saveToIndexedDBLocal(updatedProducts, updatedMovements);
       await saveToCouchDB(movementToSave, 'movement', movementToSave.id);
-      
-      setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '' });
+
+      setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false, email: '' });
       setShowMovementForm(false);
       setSelectedProduct(null);
     }
@@ -718,7 +738,55 @@ export default function StockManager() {
   const cancelDestock = () => {
     setShowMovementForm(false);
     setSelectedProduct(null);
-    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false });
+    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false, email: '' });
+  };
+
+  const handleEditMovement = (movement) => {
+    setEditingMovement({ ...movement });
+    setEditingMovementId(movement.id);
+  };
+
+  const handleSaveEditedMovement = async () => {
+    if (!editingMovement) return;
+
+    const updatedMovements = movements.map(m => m.id === editingMovement.id ? editingMovement : m);
+    setMovements(updatedMovements);
+    await saveToIndexedDBLocal(products, updatedMovements);
+    await saveToCouchDB(editingMovement, 'movement', editingMovement.id);
+
+    setEditingMovementId(null);
+    setEditingMovement(null);
+  };
+
+  const handleDeleteMovement = async (movementId) => {
+    const confirmed = window.confirm('Êtes-vous sûr de vouloir supprimer ce mouvement ? Cette action est irréversible.');
+    if (!confirmed) return;
+
+    const movementToDelete = movements.find(m => m.id === movementId);
+    const updatedMovements = movements.filter(m => m.id !== movementId);
+    setMovements(updatedMovements);
+    await saveToIndexedDBLocal(products, updatedMovements);
+    await deleteFromCouchDB('movement', movementId);
+  };
+
+  const handleSendBonDeSortieEmail = (movement) => {
+    if (!movement.email) {
+      alert('Aucun email configuré pour cette sortie');
+      return;
+    }
+
+    const subject = encodeURIComponent(`Bon de Sortie - ${movement.productName} pour ${movement.intendedFor}`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver ci-joint le bon de sortie pour :\n\n` +
+      `Produit: ${movement.productName}\n` +
+      `Quantité: ${movement.quantity}\n` +
+      `Destinataire: ${movement.intendedFor}\n` +
+      `Date: ${movement.date}\n` +
+      `Statut retrait: ${movement.withdrawn ? 'Confirmé' : 'En attente'}\n\n` +
+      `Cordialement,\nSystème de Gestion de Stock`
+    );
+
+    window.location.href = `mailto:${movement.email}?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -1043,6 +1111,10 @@ export default function StockManager() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email du destinataire</label>
+                  <input type="email" value={movementForm.email} onChange={(e) => setMovementForm({ ...movementForm, email: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="email@example.com" />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date théorique de retrait</label>
                   <input type="date" value={movementForm.theoreticalWithdrawalDate} onChange={(e) => setMovementForm({ ...movementForm, theoreticalWithdrawalDate: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                 </div>
@@ -1059,6 +1131,56 @@ export default function StockManager() {
                 <div className="flex gap-3">
                   <button onClick={handleDestock} className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">Valider</button>
                   <button onClick={cancelDestock} className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors font-medium">Annuler</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingMovementId && editingMovement && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full max-h-screen overflow-y-auto">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Éditer le mouvement</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Produit</label>
+                  <input type="text" value={editingMovement.productName} disabled className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantité</label>
+                  <input type="number" value={editingMovement.quantity} onChange={(e) => setEditingMovement({ ...editingMovement, quantity: Number(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Quantité" min="1" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destinataire</label>
+                  <input type="text" value={editingMovement.intendedFor} onChange={(e) => setEditingMovement({ ...editingMovement, intendedFor: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Destinataire" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Déstocké par</label>
+                  <select value={editingMovement.destockedBy} onChange={(e) => setEditingMovement({ ...editingMovement, destockedBy: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    {destockers.map((name) => (<option key={name} value={name}>{name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email du destinataire</label>
+                  <input type="email" value={editingMovement.email || ''} onChange={(e) => setEditingMovement({ ...editingMovement, email: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="email@example.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date théorique de retrait</label>
+                  <input type="date" value={editingMovement.theoreticalWithdrawalDate || ''} onChange={(e) => setEditingMovement({ ...editingMovement, theoreticalWithdrawalDate: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+                </div>
+                <div className="flex items-center gap-3 bg-indigo-50 p-3 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="withdrawn-edit"
+                    checked={editingMovement.withdrawn}
+                    onChange={(e) => setEditingMovement({ ...editingMovement, withdrawn: e.target.checked })}
+                    className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="withdrawn-edit" className="text-sm font-medium text-gray-700 cursor-pointer">Retrait confirmé par le destinataire</label>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={handleSaveEditedMovement} className="flex-1 bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium">Enregistrer</button>
+                  <button onClick={() => { setEditingMovementId(null); setEditingMovement(null); }} className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors font-medium">Annuler</button>
                 </div>
               </div>
             </div>
@@ -1108,9 +1230,22 @@ export default function StockManager() {
                         </div>
                       </div>
                     </div>
-                    <button onClick={() => generateBonDeSortie(movement)} className="text-green-600 hover:text-green-700 hover:bg-green-50 p-2 rounded-lg transition-colors ml-4 flex-shrink-0" title="Générer bon de sortie">
-                      <Download className="w-5 h-5" />
-                    </button>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => generateBonDeSortie(movement)} className="text-green-600 hover:text-green-700 hover:bg-green-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Générer bon de sortie">
+                        <Download className="w-5 h-5" />
+                      </button>
+                      {movement.email && (
+                        <button onClick={() => handleSendBonDeSortieEmail(movement)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Envoyer par email">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path></svg>
+                        </button>
+                      )}
+                      <button onClick={() => handleEditMovement(movement)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Éditer">
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => handleDeleteMovement(movement.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Supprimer">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
