@@ -376,41 +376,36 @@ export default function StockManager() {
 
       // Couleurs
       const primaryColor = [79, 70, 229]; // Indigo
-      const lightPrimaryColor = [230, 227, 252]; // Indigo clair
       const textColor = [31, 41, 55]; // Gris foncé
       const lightGray = [107, 114, 128]; // Gris
 
-      // ===== EN-TÊTE AVEC LOGO =====
-      // Charger et ajouter le logo depuis le fichier
-      fetch('/img/logo.jpg')
-        .then(response => response.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const imgData = e.target.result;
-            doc.addImage(imgData, 'JPEG', margin, margin, 35, 15);
-            savePDF();
-          };
-          reader.onerror = () => {
-            console.error('Erreur FileReader');
-            savePDF();
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(error => {
-          console.error('Erreur fetch logo:', error);
-          savePDF();
+  const generateBonDeSortie = (movement) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
         });
 
-      const savePDF = () => {
-        // Titre à côté du logo
-        doc.setTextColor(...textColor);
+        // Configuration des styles
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+
+        // Variables de couleurs
+        const pColor = [79, 70, 229]; // Indigo
+        const tColor = [31, 41, 55]; // Gris foncé
+        const lGray = [107, 114, 128]; // Gris
+
+        // Titre principal
+        doc.setTextColor(pColor[0], pColor[1], pColor[2]);
         doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
-        doc.text('BON DE SORTIE', margin + 40, margin + 7);
+        doc.text('BON DE SORTIE', margin + 10, margin + 10);
 
         // Numéro du bon
-        doc.setTextColor(...lightGray);
+        doc.setTextColor(lGray[0], lGray[1], lGray[2]);
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
         doc.text(`N° ${movement.id}`, pageWidth - margin - 30, margin + 7);
@@ -420,21 +415,20 @@ export default function StockManager() {
         doc.text(`Généré: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth - margin - 30, margin + 12);
 
         // Ligne séparatrice
-        doc.setDrawColor(...primaryColor);
+        doc.setDrawColor(pColor[0], pColor[1], pColor[2]);
         doc.setLineWidth(0.5);
         doc.line(margin, margin + 17, pageWidth - margin, margin + 17);
 
         let yPosition = margin + 22;
         const lineHeight = 6;
-        const colWidth = (pageWidth - 2 * margin) / 2;
 
         // ===== INFORMATIONS DESTINATAIRE =====
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
-        doc.setTextColor(...primaryColor);
+        doc.setTextColor(pColor[0], pColor[1], pColor[2]);
         doc.text('DESTINATAIRE', margin, yPosition);
         doc.setFont(undefined, 'normal');
-        doc.setTextColor(...textColor);
+        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
         yPosition += lineHeight;
         doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
@@ -442,34 +436,30 @@ export default function StockManager() {
         yPosition += lineHeight + 4;
 
         // ===== TABLEAU PRINCIPAL =====
-        const tableStartY = yPosition;
         const tableWidth = pageWidth - 2 * margin;
-        const col1Width = tableWidth * 0.65; // Désignation
-        const col2Width = tableWidth * 0.35; // Quantité
+        const col1Width = tableWidth * 0.65;
+        const col2Width = tableWidth * 0.35;
 
         // En-tête du tableau
-        doc.setFillColor(...primaryColor);
+        doc.setFillColor(pColor[0], pColor[1], pColor[2]);
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
 
-        // Colonne 1: Désignation du produit
         doc.rect(margin, yPosition, col1Width, 8, 'F');
         doc.text('DÉSIGNATION DU PRODUIT', margin + 2, yPosition + 5.5);
 
-        // Colonne 2: Quantité
         doc.rect(margin + col1Width, yPosition, col2Width, 8, 'F');
         doc.text('QUANTITÉ', margin + col1Width + 2, yPosition + 5.5);
 
         yPosition += 8;
 
-        // Ligne de données du tableau
-        doc.setTextColor(...textColor);
+        // Ligne de données
+        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
         doc.setFont(undefined, 'normal');
         doc.setFontSize(11);
 
-        // Borders pour la ligne de données
-        doc.setDrawColor(...lightGray);
+        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
         doc.setLineWidth(0.3);
         doc.rect(margin, yPosition, col1Width, 12);
         doc.rect(margin + col1Width, yPosition, col2Width, 12);
@@ -478,13 +468,13 @@ export default function StockManager() {
         doc.text(movement.productName, margin + 2, yPosition + 4);
         doc.setFont(undefined, 'bold');
         doc.setFontSize(13);
-        doc.setTextColor(220, 38, 38); // Rouge pour la quantité
+        doc.setTextColor(220, 38, 38);
         doc.text(`${movement.quantity}`, margin + col1Width + 2, yPosition + 7);
 
         yPosition += 12;
 
         // ===== INFORMATIONS SUPPLÉMENTAIRES =====
-        doc.setTextColor(...textColor);
+        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
         yPosition += 4;
@@ -493,13 +483,13 @@ export default function StockManager() {
         doc.setFont(undefined, 'bold');
         doc.text('Déstocké par:', margin, yPosition);
         doc.setFont(undefined, 'normal');
-        doc.text(movement.destockedBy, margin + col1Width * 0.3, yPosition);
+        doc.text(movement.destockedBy, margin + 30, yPosition);
 
         // Date du mouvement
         doc.setFont(undefined, 'bold');
-        doc.text('Date:', margin + col1Width * 0.5, yPosition);
+        doc.text('Date:', margin + 95, yPosition);
         doc.setFont(undefined, 'normal');
-        doc.text(movement.date, margin + col1Width * 0.65, yPosition);
+        doc.text(movement.date, margin + 110, yPosition);
 
         yPosition += lineHeight + 1;
 
@@ -510,26 +500,22 @@ export default function StockManager() {
           doc.setFont(undefined, 'bold');
           doc.text('Date théorique de retrait:', margin, yPosition);
           doc.setFont(undefined, 'normal');
-          doc.text(formattedDate, margin + col1Width * 0.3, yPosition);
+          doc.text(formattedDate, margin + 30, yPosition);
           yPosition += lineHeight + 1;
         }
 
         // Statut du retrait
         doc.setFont(undefined, 'bold');
         const withdrawnText = movement.withdrawn ? '✓ Confirmé' : 'En attente';
-        const withdrawnColor = movement.withdrawn ? [34, 197, 94] : [217, 119, 6]; // Vert ou Orange
-        doc.setTextColor(...withdrawnColor);
+        const wColor = movement.withdrawn ? [34, 197, 94] : [217, 119, 6];
+        doc.setTextColor(wColor[0], wColor[1], wColor[2]);
         doc.text('Statut du retrait: ' + withdrawnText, margin, yPosition);
-        doc.setTextColor(...textColor);
+        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
 
-        yPosition += lineHeight + 6;
-
-
-
-        yPosition += 2;
+        yPosition += lineHeight + 10;
 
         // ===== SECTION SIGNATURES =====
-        doc.setDrawColor(...lightGray);
+        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
         doc.setLineWidth(0.4);
 
         const signatureY = pageHeight - 60;
@@ -538,13 +524,13 @@ export default function StockManager() {
 
         doc.setFont(undefined, 'bold');
         doc.setFontSize(10);
-        doc.setTextColor(...textColor);
+        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
         doc.text('SIGNATURES', margin, signatureY);
 
         // Box 1: Responsable dépôt
         const box1X = margin;
         const box1Y = signatureY + 5;
-        doc.setDrawColor(...lightGray);
+        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
         doc.setLineWidth(0.3);
         doc.rect(box1X, box1Y, signatureBoxWidth, signatureBoxHeight);
 
@@ -555,7 +541,6 @@ export default function StockManager() {
         doc.setFontSize(8);
         doc.text('Signature:', box1X + 2, box1Y + 12);
 
-        // Ligne pour signature
         doc.setLineWidth(0.2);
         doc.line(box1X + 15, box1Y + 12, box1X + signatureBoxWidth - 2, box1Y + 12);
 
@@ -567,7 +552,7 @@ export default function StockManager() {
         // Box 2: Destinataire
         const box2X = margin + signatureBoxWidth + margin;
         const box2Y = signatureY + 5;
-        doc.setDrawColor(...lightGray);
+        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
         doc.setLineWidth(0.3);
         doc.rect(box2X, box2Y, signatureBoxWidth, signatureBoxHeight);
 
@@ -578,7 +563,6 @@ export default function StockManager() {
         doc.setFontSize(8);
         doc.text('Signature:', box2X + 2, box2Y + 12);
 
-        // Ligne pour signature
         doc.setLineWidth(0.2);
         doc.line(box2X + 15, box2Y + 12, box2X + signatureBoxWidth - 2, box2Y + 12);
 
@@ -589,14 +573,17 @@ export default function StockManager() {
 
         // ===== PIED DE PAGE =====
         doc.setFontSize(7);
-        doc.setTextColor(107, 114, 128);
+        doc.setTextColor(lGray[0], lGray[1], lGray[2]);
         doc.text('Stock Manager - Système de gestion d\'inventaire', pageWidth / 2, pageHeight - 5, { align: 'center' });
 
         // Télécharger le PDF
         const timestamp = new Date().toISOString().split('T')[0];
         doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
         resolve();
-      };
+      } catch (error) {
+        console.error('Erreur génération PDF:', error);
+        reject(error);
+      }
     });
   };
 
