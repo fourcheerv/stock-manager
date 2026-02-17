@@ -524,17 +524,7 @@ export default function StockManager() {
 
         yPosition += lineHeight + 6;
 
-        // Email si disponible
-        if (movement.email) {
-          doc.setFont(undefined, 'bold');
-          doc.setFontSize(9);
-          doc.text('Email du destinataire:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.setTextColor([66, 133, 244]); // Bleu pour email
-          doc.text(movement.email, margin + col1Width * 0.3, yPosition);
-          doc.setTextColor(...textColor);
-          yPosition += lineHeight + 4;
-        }
+
 
         yPosition += 2;
 
@@ -608,6 +598,37 @@ export default function StockManager() {
         resolve();
       };
     });
+  };
+
+  const handleSendBonDeSortieEmail = async (movement) => {
+    if (!movement.email) {
+      alert('Aucun email configuré pour cette sortie');
+      return;
+    }
+
+    try {
+      const subject = encodeURIComponent(`Bon de Sortie - ${movement.productName} pour ${movement.intendedFor}`);
+      const body = encodeURIComponent(
+        `Bonjour,\n\nVoici les détails du bon de sortie :\n\n` +
+        `Produit: ${movement.productName}\n` +
+        `Quantité: ${movement.quantity}\n` +
+        `Destinataire: ${movement.intendedFor}\n` +
+        `Date: ${movement.date}\n` +
+        `Heure: ${movement.time}\n` +
+        `Déstocké par: ${movement.destockedBy}\n` +
+        `Statut retrait: ${movement.withdrawn ? 'Confirmé' : 'En attente'}\n` +
+        `${movement.theoreticalWithdrawalDate ? `Date théorique de retrait: ${movement.theoreticalWithdrawalDate}\n` : ''}\n` +
+        `Cordialement,\nSystème de Gestion de Stock`
+      );
+
+      const mailtoLink = `mailto:${movement.email}?subject=${subject}&body=${body}`;
+      const a = document.createElement('a');
+      a.href = mailtoLink;
+      a.click();
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi:', error);
+      alert('Erreur lors de l\'envoi de l\'email');
+    }
   };
 
   const handleAddProduct = async () => {
@@ -735,10 +756,41 @@ export default function StockManager() {
     }
   };
 
+  const handleSendBonDeSortieEmail = async (movement) => {
+    if (!movement.email) {
+      alert('Aucun email configuré pour cette sortie');
+      return;
+    }
+
+    try {
+      const subject = encodeURIComponent(`Bon de Sortie - ${movement.productName} pour ${movement.intendedFor}`);
+      const body = encodeURIComponent(
+        `Bonjour,\n\nVoici les détails du bon de sortie :\n\n` +
+        `Produit: ${movement.productName}\n` +
+        `Quantité: ${movement.quantity}\n` +
+        `Destinataire: ${movement.intendedFor}\n` +
+        `Date: ${movement.date}\n` +
+        `Heure: ${movement.time}\n` +
+        `Déstocké par: ${movement.destockedBy}\n` +
+        `Statut retrait: ${movement.withdrawn ? 'Confirmé' : 'En attente'}\n` +
+        `${movement.theoreticalWithdrawalDate ? `Date théorique de retrait: ${movement.theoreticalWithdrawalDate}\n` : ''}\n` +
+        `Cordialement,\nSystème de Gestion de Stock`
+      );
+
+      const mailtoLink = `mailto:${movement.email}?subject=${subject}&body=${body}`;
+      const a = document.createElement('a');
+      a.href = mailtoLink;
+      a.click();
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi:', error);
+      alert('Erreur lors de l\'envoi de l\'email');
+    }
+  };
+
   const openDestockForm = (product) => {
     setSelectedProduct(product);
     setShowMovementForm(true);
-    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false });
+    setMovementForm({ quantity: '', destockedBy: 'Hiane Benamar', intendedFor: '', theoreticalWithdrawalDate: '', withdrawn: false, email: '' });
   };
 
   const getExistingDestinations = (productId) => {
@@ -779,39 +831,7 @@ export default function StockManager() {
     await deleteFromCouchDB('movement', movementId);
   };
 
-  const handleSendBonDeSortieEmail = async (movement) => {
-    if (!movement.email) {
-      alert('Aucun email configuré pour cette sortie');
-      return;
-    }
 
-    try {
-      // Générer le PDF et déclencher le téléchargement
-      await generateBonDeSortie(movement);
-
-      // Préparer le contenu de l'email
-      const subject = encodeURIComponent(`Bon de Sortie - ${movement.productName} pour ${movement.intendedFor}`);
-      const body = encodeURIComponent(
-        `Bonjour,\n\nVeuillez trouver ci-joint le bon de sortie pour :\n\n` +
-        `Produit: ${movement.productName}\n` +
-        `Quantité: ${movement.quantity}\n` +
-        `Destinataire: ${movement.intendedFor}\n` +
-        `Date: ${movement.date}\n` +
-        `Statut retrait: ${movement.withdrawn ? 'Confirmé' : 'En attente'}\n\n` +
-        `Le bon de sortie a été téléchargé automatiquement. Veuillez le joindre en pièce jointe.\n\n` +
-        `Cordialement,\nSystème de Gestion de Stock`
-      );
-
-      // Créer un lien mailto et le cliquer
-      const mailtoLink = `mailto:${movement.email}?subject=${subject}&body=${body}`;
-      const a = document.createElement('a');
-      a.href = mailtoLink;
-      a.click();
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi:', error);
-      alert('Erreur lors de la génération du PDF');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
