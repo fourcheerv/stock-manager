@@ -364,46 +364,156 @@ export default function StockManager() {
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 10;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
 
-      doc.setFontSize(16);
-      doc.text('BON DE SORTIE', margin, margin + 10);
+      // Couleurs professionnelles
+      const primaryBlue = [0, 51, 102];
+      const accentOrange = [255, 102, 0];
+      const darkGray = [50, 50, 50];
+      const lightGray = [240, 240, 240];
 
-      doc.setFontSize(10);
-      doc.text(`N° ${movement.id}`, pageWidth - margin - 30, margin + 10);
+      // ===== EN-TÊTE AVEC LOGO =====
+      // Fond de couleur pour l'en-tête
+      doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+      doc.rect(0, 0, pageWidth, 35, 'F');
 
-      doc.setFontSize(11);
-      doc.text('DESTINATAIRE', margin, margin + 30);
-      doc.setFont(undefined, 'bold');
-      doc.text(movement.intendedFor, margin, margin + 40);
-      doc.setFont(undefined, 'normal');
-
-      doc.setFontSize(11);
-      doc.text('PRODUIT', margin, margin + 55);
-      doc.text(movement.productName, margin + 40, margin + 55);
-
-      doc.setFontSize(11);
-      doc.text('QUANTITE', margin, margin + 70);
-      doc.setFont(undefined, 'bold');
-      doc.setFontSize(14);
-      doc.text(`${movement.quantity}`, margin + 40, margin + 70);
-      doc.setFont(undefined, 'normal');
-
-      doc.setFontSize(9);
-      doc.text(`Destocker par: ${movement.destockedBy}`, margin, margin + 90);
-      doc.text(`Date: ${movement.date}`, margin, margin + 100);
-
-      if (movement.theoreticalWithdrawalDate) {
-        doc.text(`Date theorique retrait: ${movement.theoreticalWithdrawalDate}`, margin, margin + 110);
+      // Logo - charger depuis img/logo.jpg
+      try {
+        const logoImg = new Image();
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', margin, 5, 25, 25);
+        };
+        logoImg.src = '/img/logo.jpg';
+      } catch (e) {
+        // Si impossible de charger le logo, continuer sans
       }
 
-      doc.text(`Statut retrait: ${movement.withdrawn ? 'Confirme' : 'En attente'}`, margin, margin + 120);
+      // Titre et numéro
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont(undefined, 'bold');
+      doc.text('BON DE SORTIE DE STOCK', margin + 32, 16);
+
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text(`N°${movement.id}`, margin + 32, 27);
+
+      // Ligne séparatrice
+      doc.setDrawColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+      doc.setLineWidth(1.5);
+      doc.line(margin, 35, pageWidth - margin, 35);
+
+      let yPosition = 45;
+
+      // ===== SECTION DESTINATAIRE =====
+      doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+      doc.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
+
+      doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      doc.text('DESTINATAIRE', margin + 3, yPosition + 6);
+
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(movement.intendedFor, margin + 3, yPosition + 17);
+
+      yPosition += 35;
+
+      // ===== TABLEAU PRODUIT =====
+      const colWidth = (pageWidth - 2 * margin) / 2;
+
+      // En-tête tableau
+      doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+
+      doc.rect(margin, yPosition, colWidth, 8, 'F');
+      doc.text('PRODUIT', margin + 3, yPosition + 6);
+
+      doc.rect(margin + colWidth, yPosition, colWidth, 8, 'F');
+      doc.text('QUANTITÉ', margin + colWidth + 3, yPosition + 6);
+
+      yPosition += 8;
+
+      // Ligne produit
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(11);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.5);
+      doc.rect(margin, yPosition, pageWidth - 2 * margin, 12);
+
+      doc.text(movement.productName, margin + 3, yPosition + 7);
+
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+      doc.text(`${movement.quantity}`, margin + colWidth + 3, yPosition + 7);
+
+      yPosition += 22;
+
+      // ===== DÉTAILS =====
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(9);
+
+      const details = [
+        `Déstocké par: ${movement.destockedBy}`,
+        `Date: ${movement.date} à ${movement.time}`,
+        `Statut: ${movement.withdrawn ? '✓ Confirmé' : 'En attente'}`,
+        ...(movement.theoreticalWithdrawalDate ? [`Date théorique retrait: ${movement.theoreticalWithdrawalDate}`] : [])
+      ];
+
+      details.forEach((detail, index) => {
+        doc.text(detail, margin, yPosition);
+        yPosition += 6;
+      });
+
+      yPosition += 8;
+
+      // ===== SECTION SIGNATURES =====
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.5);
+
+      const signBoxWidth = (pageWidth - 3 * margin) / 2;
+      const signBoxHeight = 28;
+      const signY = pageHeight - 50;
+
+      // Box Responsable
+      doc.rect(margin, signY, signBoxWidth, signBoxHeight);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      doc.text('Responsable Dépôt', margin + 2, signY + 4);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7);
+      doc.text('Signature: ________________', margin + 2, signY + 10);
+      doc.text('Date: ________________', margin + 2, signY + 20);
+
+      // Box Destinataire
+      doc.rect(margin + signBoxWidth + margin, signY, signBoxWidth, signBoxHeight);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(8);
+      doc.text('Destinataire', margin + signBoxWidth + margin + 2, signY + 4);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7);
+      doc.text('Signature: ________________', margin + signBoxWidth + margin + 2, signY + 10);
+      doc.text('Date: ________________', margin + signBoxWidth + margin + 2, signY + 20);
+
+      // Pied de page
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text('Stock Manager - Gestion de Stock', pageWidth / 2, pageHeight - 4, { align: 'center' });
 
       const timestamp = new Date().toISOString().split('T')[0];
       doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
     } catch (error) {
       console.error('Erreur PDF:', error);
-      alert('Erreur generation PDF');
+      alert('Erreur génération PDF');
     }
   };
 
