@@ -360,25 +360,6 @@ export default function StockManager() {
       window.URL.revokeObjectURL(url);
     }, 100);
   };
-
-  const generateBonDeSortie = (movement) => {
-    return new Promise((resolve, reject) => {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      // Configuration des styles
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-
-      // Couleurs
-      const primaryColor = [79, 70, 229]; // Indigo
-      const textColor = [31, 41, 55]; // Gris foncé
-      const lightGray = [107, 114, 128]; // Gris
-
   const generateBonDeSortie = (movement) => {
     return new Promise((resolve, reject) => {
       try {
