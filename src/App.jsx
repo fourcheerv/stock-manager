@@ -361,211 +361,50 @@ export default function StockManager() {
     }, 100);
   };
   const generateBonDeSortie = (movement) => {
-    return new Promise((resolve, reject) => {
-      try {
-        const doc = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 10;
 
-        // Configuration des styles
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 10;
+      doc.setFontSize(16);
+      doc.text('BON DE SORTIE', margin, margin + 10);
 
-        // Variables de couleurs
-        const pColor = [79, 70, 229]; // Indigo
-        const tColor = [31, 41, 55]; // Gris foncé
-        const lGray = [107, 114, 128]; // Gris
+      doc.setFontSize(10);
+      doc.text(`N° ${movement.id}`, pageWidth - margin - 30, margin + 10);
 
-        // Titre principal
-        doc.setTextColor(pColor[0], pColor[1], pColor[2]);
-        doc.setFontSize(18);
-        doc.setFont(undefined, 'bold');
-        doc.text('BON DE SORTIE', margin + 10, margin + 10);
+      doc.setFontSize(11);
+      doc.text('DESTINATAIRE', margin, margin + 30);
+      doc.setFont(undefined, 'bold');
+      doc.text(movement.intendedFor, margin, margin + 40);
+      doc.setFont(undefined, 'normal');
 
-        // Numéro du bon
-        doc.setTextColor(lGray[0], lGray[1], lGray[2]);
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text(`N° ${movement.id}`, pageWidth - margin - 30, margin + 7);
+      doc.setFontSize(11);
+      doc.text('PRODUIT', margin, margin + 55);
+      doc.text(movement.productName, margin + 40, margin + 55);
 
-        // Date et heure
-        doc.setFontSize(8);
-        doc.text(`Généré: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth - margin - 30, margin + 12);
+      doc.setFontSize(11);
+      doc.text('QUANTITE', margin, margin + 70);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(14);
+      doc.text(`${movement.quantity}`, margin + 40, margin + 70);
+      doc.setFont(undefined, 'normal');
 
-        // Ligne séparatrice
-        doc.setDrawColor(pColor[0], pColor[1], pColor[2]);
-        doc.setLineWidth(0.5);
-        doc.line(margin, margin + 17, pageWidth - margin, margin + 17);
+      doc.setFontSize(9);
+      doc.text(`Destocker par: ${movement.destockedBy}`, margin, margin + 90);
+      doc.text(`Date: ${movement.date}`, margin, margin + 100);
 
-        let yPosition = margin + 22;
-        const lineHeight = 6;
-
-        // ===== INFORMATIONS DESTINATAIRE =====
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(pColor[0], pColor[1], pColor[2]);
-        doc.text('DESTINATAIRE', margin, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
-        yPosition += lineHeight;
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'bold');
-        doc.text(movement.intendedFor, margin, yPosition);
-        yPosition += lineHeight + 4;
-
-        // ===== TABLEAU PRINCIPAL =====
-        const tableWidth = pageWidth - 2 * margin;
-        const col1Width = tableWidth * 0.65;
-        const col2Width = tableWidth * 0.35;
-
-        // En-tête du tableau
-        doc.setFillColor(pColor[0], pColor[1], pColor[2]);
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-
-        doc.rect(margin, yPosition, col1Width, 8, 'F');
-        doc.text('DÉSIGNATION DU PRODUIT', margin + 2, yPosition + 5.5);
-
-        doc.rect(margin + col1Width, yPosition, col2Width, 8, 'F');
-        doc.text('QUANTITÉ', margin + col1Width + 2, yPosition + 5.5);
-
-        yPosition += 8;
-
-        // Ligne de données
-        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(11);
-
-        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
-        doc.setLineWidth(0.3);
-        doc.rect(margin, yPosition, col1Width, 12);
-        doc.rect(margin + col1Width, yPosition, col2Width, 12);
-
-        // Contenu
-        doc.text(movement.productName, margin + 2, yPosition + 4);
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(13);
-        doc.setTextColor(220, 38, 38);
-        doc.text(`${movement.quantity}`, margin + col1Width + 2, yPosition + 7);
-
-        yPosition += 12;
-
-        // ===== INFORMATIONS SUPPLÉMENTAIRES =====
-        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(9);
-        yPosition += 4;
-
-        // Déstocké par
-        doc.setFont(undefined, 'bold');
-        doc.text('Déstocké par:', margin, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.text(movement.destockedBy, margin + 30, yPosition);
-
-        // Date du mouvement
-        doc.setFont(undefined, 'bold');
-        doc.text('Date:', margin + 95, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.text(movement.date, margin + 110, yPosition);
-
-        yPosition += lineHeight + 1;
-
-        // Date théorique de retrait
-        if (movement.theoreticalWithdrawalDate) {
-          const dateObj = new Date(movement.theoreticalWithdrawalDate + 'T00:00:00');
-          const formattedDate = dateObj.toLocaleDateString('fr-FR');
-          doc.setFont(undefined, 'bold');
-          doc.text('Date théorique de retrait:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(formattedDate, margin + 30, yPosition);
-          yPosition += lineHeight + 1;
-        }
-
-        // Statut du retrait
-        doc.setFont(undefined, 'bold');
-        const withdrawnText = movement.withdrawn ? '✓ Confirmé' : 'En attente';
-        const wColor = movement.withdrawn ? [34, 197, 94] : [217, 119, 6];
-        doc.setTextColor(wColor[0], wColor[1], wColor[2]);
-        doc.text('Statut du retrait: ' + withdrawnText, margin, yPosition);
-        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
-
-        yPosition += lineHeight + 10;
-
-        // ===== SECTION SIGNATURES =====
-        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
-        doc.setLineWidth(0.4);
-
-        const signatureY = pageHeight - 60;
-        const signatureBoxWidth = (pageWidth - 3 * margin) / 2;
-        const signatureBoxHeight = 30;
-
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(10);
-        doc.setTextColor(tColor[0], tColor[1], tColor[2]);
-        doc.text('SIGNATURES', margin, signatureY);
-
-        // Box 1: Responsable dépôt
-        const box1X = margin;
-        const box1Y = signatureY + 5;
-        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
-        doc.setLineWidth(0.3);
-        doc.rect(box1X, box1Y, signatureBoxWidth, signatureBoxHeight);
-
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(9);
-        doc.text('Responsable Dépôt', box1X + 2, box1Y + 5);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        doc.text('Signature:', box1X + 2, box1Y + 12);
-
-        doc.setLineWidth(0.2);
-        doc.line(box1X + 15, box1Y + 12, box1X + signatureBoxWidth - 2, box1Y + 12);
-
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.text('Date:', box1X + 2, box1Y + 23);
-        doc.line(box1X + 10, box1Y + 23, box1X + signatureBoxWidth - 2, box1Y + 23);
-
-        // Box 2: Destinataire
-        const box2X = margin + signatureBoxWidth + margin;
-        const box2Y = signatureY + 5;
-        doc.setDrawColor(lGray[0], lGray[1], lGray[2]);
-        doc.setLineWidth(0.3);
-        doc.rect(box2X, box2Y, signatureBoxWidth, signatureBoxHeight);
-
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(9);
-        doc.text('Destinataire', box2X + 2, box2Y + 5);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        doc.text('Signature:', box2X + 2, box2Y + 12);
-
-        doc.setLineWidth(0.2);
-        doc.line(box2X + 15, box2Y + 12, box2X + signatureBoxWidth - 2, box2Y + 12);
-
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.text('Date:', box2X + 2, box2Y + 23);
-        doc.line(box2X + 10, box2Y + 23, box2X + signatureBoxWidth - 2, box2Y + 23);
-
-        // ===== PIED DE PAGE =====
-        doc.setFontSize(7);
-        doc.setTextColor(lGray[0], lGray[1], lGray[2]);
-        doc.text('Stock Manager - Système de gestion d\'inventaire', pageWidth / 2, pageHeight - 5, { align: 'center' });
-
-        // Télécharger le PDF
-        const timestamp = new Date().toISOString().split('T')[0];
-        doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
-        resolve();
-      } catch (error) {
-        console.error('Erreur génération PDF:', error);
-        reject(error);
+      if (movement.theoreticalWithdrawalDate) {
+        doc.text(`Date theorique retrait: ${movement.theoreticalWithdrawalDate}`, margin, margin + 110);
       }
-    });
+
+      doc.text(`Statut retrait: ${movement.withdrawn ? 'Confirme' : 'En attente'}`, margin, margin + 120);
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
+    } catch (error) {
+      console.error('Erreur PDF:', error);
+      alert('Erreur generation PDF');
+    }
   };
 
   const handleSendBonDeSortieEmail = async (movement) => {
