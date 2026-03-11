@@ -4,22 +4,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import jsPDF from 'jspdf';
 import { getAllDocs, getDoc, saveDoc, deleteDoc } from './couchdbProxy';
 
-// Configuration CouchDB avec authentification Basic
-const COUCHDB_USER = 'access';
-const COUCHDB_PASSWORD = '4G9?r3oKH7tSbCB7rMM9PDpq7L5Yn&tCgE8?qEDD';
-const COUCHDB_HOST = 'https://couchdb.monproprecloud.fr';
-const COUCHDB_DB = 'bobinos';
-const COUCHDB_URL = `${COUCHDB_HOST}/${COUCHDB_DB}`;
-
-// Authentification Basic
-const getAuthHeaders = () => {
-  const credentials = btoa(`${COUCHDB_USER}:${COUCHDB_PASSWORD}`);
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Basic ${credentials}`
-  };
-};
-
 // Initialisation IndexedDB
 const DB_NAME = 'StockManager';
 const DB_VERSION = 1;

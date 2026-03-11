@@ -131,12 +131,24 @@ const COLORS = ['#4F46E5', '#06B6D4', '#10B981', ...];
 
 ## 🔐 Sécurité
 
-⚠️ **Note importante** : Cette application stocke les données en mémoire (state React). Les données sont perdues lors du rafraîchissement de la page. 
+Les accès CouchDB ne doivent jamais être embarqués dans le frontend. La configuration sensible passe désormais par des variables d'environnement côté serveur :
 
-Pour une utilisation en production, il est recommandé d'ajouter :
-- Une base de données (Firebase, MongoDB, PostgreSQL)
-- Une authentification utilisateur
-- Une sauvegarde automatique des données
+```bash
+COUCHDB_URL=https://couchdb.monproprecloud.fr/bobinos
+COUCHDB_USER=access
+COUCHDB_PASSWORD=mot-de-passe-roté
+ALLOWED_ORIGINS=https://votre-app.example.com,http://localhost:5173
+```
+
+Le proxy `/api/couchdb` n'expose plus un passthrough générique vers CouchDB. Il n'autorise que :
+- la lecture de `/_all_docs?include_docs=true`
+- la lecture d'un document `product_*` ou `movement_*`
+- l'écriture et la suppression de ces mêmes documents
+
+Après ce changement, il faut impérativement :
+- faire tourner le mot de passe du compte CouchDB `access`
+- supprimer tout secret déjà commité de l'historique Git si le dépôt a été partagé
+- limiter côté CouchDB les droits du compte `access` à la seule base `bobinos`
 
 ## 🤝 Contribution
 

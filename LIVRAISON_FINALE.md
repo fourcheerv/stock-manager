@@ -233,6 +233,15 @@ Utile pour Suivi mensuel, KPI de performance
    Prêt pour futures améliorations
 ```
 
+### Spécification future ajoutée
+```
+Archivage des bons de sortie comme pièces jointes du mouvement
+├─ Un mouvement doit pouvoir stocker une ou plusieurs pièces jointes
+├─ Le bon archivé doit correspondre au document réellement émis
+├─ Le bon archivé doit rester consultable et téléchargeable plus tard
+└─ Cette archive documentaire est distincte de la régénération d'un PDF à la demande
+```
+
 ---
 
 ## 🔄 Workflow d'Utilisation Type

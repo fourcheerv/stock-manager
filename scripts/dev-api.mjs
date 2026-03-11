@@ -1,3 +1,6 @@
+import http from 'node:http';
+
+const PORT = Number(process.env.DEV_API_PORT || 3001);
 const COUCHDB_USER = process.env.COUCHDB_USER;
 const COUCHDB_PASSWORD = process.env.COUCHDB_PASSWORD;
 const COUCHDB_URL = process.env.COUCHDB_URL;
@@ -9,13 +12,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 const DOC_ID_PATTERN = /^(product|movement)_[A-Za-z0-9_-]+$/;
 const DOC_TYPE_PATTERN = /^(product|movement)$/;
 
-function setSecurityHeaders(res) {
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'same-origin');
-}
-
-function setCorsHeaders(req, res) {
+function setHeaders(req, res) {
   const origin = req.headers.origin;
 
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
@@ -26,20 +23,23 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+}
+
+function sendJson(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(payload));
 }
 
 function getAuthHeaders() {
   const credentials = Buffer.from(`${COUCHDB_USER}:${COUCHDB_PASSWORD}`).toString('base64');
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Basic ${credentials}`,
+    Authorization: `Basic ${credentials}`,
   };
-}
-
-function assertConfiguration() {
-  if (!COUCHDB_USER || !COUCHDB_PASSWORD || !COUCHDB_URL) {
-    throw new Error('Missing CouchDB server configuration');
-  }
 }
 
 function isValidDocId(docId) {
@@ -89,9 +89,8 @@ function buildRequest(payload) {
       return null;
     }
 
-    const rev = encodeURIComponent(body.rev);
     return {
-      url: `${COUCHDB_URL}/${encodedDocId}?rev=${rev}`,
+      url: `${COUCHDB_URL}/${encodedDocId}?rev=${encodeURIComponent(body.rev)}`,
       options: { method: 'DELETE', headers: getAuthHeaders() },
     };
   }
@@ -99,27 +98,61 @@ function buildRequest(payload) {
   return null;
 }
 
-export default async function handler(req, res) {
-  setSecurityHeaders(res);
-  setCorsHeaders(req, res);
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let rawBody = '';
+
+    req.on('data', chunk => {
+      rawBody += chunk;
+    });
+
+    req.on('end', () => {
+      if (!rawBody) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(rawBody));
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+if (!COUCHDB_USER || !COUCHDB_PASSWORD || !COUCHDB_URL) {
+  console.error('Missing COUCHDB_USER, COUCHDB_PASSWORD or COUCHDB_URL');
+  process.exit(1);
+}
+
+const server = http.createServer(async (req, res) => {
+  setHeaders(req, res);
+
+  if (req.url !== '/api/couchdb') {
+    sendJson(res, 404, { error: 'Not found' });
+    return;
+  }
 
   if (req.method === 'OPTIONS') {
-    res.status(204).end();
+    res.statusCode = 204;
+    res.end();
     return;
   }
 
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
+    sendJson(res, 405, { error: 'Method not allowed' });
     return;
   }
 
   try {
-    assertConfiguration();
-
-    const request = buildRequest(req.body);
+    const payload = await readJsonBody(req);
+    const request = buildRequest(payload);
 
     if (!request) {
-      res.status(400).json({ error: 'Invalid request payload' });
+      sendJson(res, 400, { error: 'Invalid request payload' });
       return;
     }
 
@@ -127,15 +160,19 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const details = await response.text();
-      console.error('Erreur proxy CouchDB:', response.status, details);
-      res.status(response.status).json({ error: 'CouchDB request failed' });
+      console.error('Local API CouchDB error:', response.status, details);
+      sendJson(res, response.status, { error: 'CouchDB request failed' });
       return;
     }
 
     const data = await response.json();
-    res.status(200).json(data);
+    sendJson(res, 200, data);
   } catch (error) {
-    console.error('Erreur proxy CouchDB:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Local API error:', error);
+    sendJson(res, 500, { error: 'Internal server error' });
   }
-}
+});
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`Local CouchDB API listening on http://127.0.0.1:${PORT}`);
+});

@@ -320,6 +320,13 @@ R: Pas de problème! L'app fonctionne hors-ligne avec localStorage. Elle re-sync
 2. Modification/suppression de mouvements
 3. Export PDF/Excel
 4. Alertes pour retraits en retard
+5. Archivage des bons de sortie comme pièces jointes du mouvement
+
+#### Spécification à conserver
+- Chaque mouvement doit pouvoir référencer un ou plusieurs bons de sortie archivés
+- Le bon archivé doit être figé au moment de son émission pour conserver une preuve documentaire
+- L'utilisateur doit pouvoir consulter et télécharger le bon archivé depuis la fiche ou l'historique du mouvement
+- L'archivage doit rester distinct de la génération à la volée d'un nouveau PDF
 
 ---
 

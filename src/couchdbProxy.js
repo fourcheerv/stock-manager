@@ -1,14 +1,7 @@
-// Module utilitaire pour communiquer avec CouchDB via le proxy Vercel
 const API_BASE = '/api/couchdb';
 
-export const fetchCouchDB = async (method = 'GET', path = '', body = null) => {
+export const fetchCouchDB = async (payload) => {
   try {
-    const payload = {
-      method,
-      path,
-      ...(body && { body })
-    };
-
     const response = await fetch(API_BASE, {
       method: 'POST',
       headers: {
@@ -29,17 +22,17 @@ export const fetchCouchDB = async (method = 'GET', path = '', body = null) => {
 };
 
 export const getAllDocs = async () => {
-  return fetchCouchDB('GET', '/_all_docs?include_docs=true');
+  return fetchCouchDB({ action: 'list' });
 };
 
 export const getDoc = async (docId) => {
-  return fetchCouchDB('GET', `/${docId}`);
+  return fetchCouchDB({ action: 'get', docId });
 };
 
 export const saveDoc = async (doc) => {
-  return fetchCouchDB('PUT', `/${doc._id}`, doc);
+  return fetchCouchDB({ action: 'save', docId: doc._id, body: doc });
 };
 
 export const deleteDoc = async (docId, rev) => {
-  return fetchCouchDB('DELETE', `/${docId}?rev=${rev}`);
+  return fetchCouchDB({ action: 'delete', docId, body: { rev } });
 };
