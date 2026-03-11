@@ -1,8 +1,201 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff, Download } from 'lucide-react';
+import { Trash2, Plus, Package, Edit2, AlertTriangle, Minus, BarChart3, RefreshCw, FileDown, Wifi, WifiOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import { getAllDocs, getDoc, saveDoc, deleteDoc } from './couchdbProxy';
+
+let logoDataUrlPromise;
+
+const sanitizeFileNamePart = (value) => {
+  return String(value || 'document')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'document';
+};
+
+const buildSlipFileName = (movement, archivedAt) => {
+  const datePart = (archivedAt || new Date().toISOString()).split('T')[0];
+  const recipientPart = sanitizeFileNamePart(movement.intendedFor);
+  return `bon_de_sortie_${recipientPart}_${datePart}.pdf`;
+};
+
+const getMovementArchivedSlips = (movement) => {
+  return Array.isArray(movement.archivedAttachments)
+    ? movement.archivedAttachments.filter((attachment) => attachment.kind === 'bon_de_sortie')
+    : [];
+};
+
+const getLatestArchivedSlip = (movement) => {
+  const archivedSlips = getMovementArchivedSlips(movement);
+  return archivedSlips.length > 0 ? archivedSlips[archivedSlips.length - 1] : null;
+};
+
+const loadLogoDataUrl = async () => {
+  if (!logoDataUrlPromise) {
+    logoDataUrlPromise = fetch('/img/logo.jpg')
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return response.blob();
+      })
+      .then((blob) => {
+        if (!blob) {
+          return null;
+        }
+
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch((error) => {
+        console.warn('Impossible de charger le logo:', error);
+        return null;
+      });
+  }
+
+  return logoDataUrlPromise;
+};
+
+const createBonDeSortiePdf = async (movement) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const primaryBlue = [0, 51, 102];
+  const accentOrange = [255, 102, 0];
+  const darkGray = [50, 50, 50];
+  const lightGray = [240, 240, 240];
+
+  doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+  doc.rect(0, 0, pageWidth, 35, 'F');
+
+  try {
+    const logoDataUrl = await loadLogoDataUrl();
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'JPEG', margin, 5, 25, 25);
+    }
+  } catch (error) {
+    console.warn('Impossible d\'ajouter le logo au PDF:', error);
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont(undefined, 'bold');
+  doc.text('BON DE SORTIE DE STOCK', margin + 32, 16);
+
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'normal');
+  doc.text(`N°${movement.id}`, margin + 32, 27);
+
+  doc.setDrawColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+  doc.setLineWidth(1.5);
+  doc.line(margin, 35, pageWidth - margin, 35);
+
+  let yPosition = 45;
+
+  doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+  doc.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
+
+  doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.text('DESTINATAIRE', margin + 3, yPosition + 6);
+
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  doc.setFontSize(13);
+  doc.setFont(undefined, 'bold');
+  doc.text(movement.intendedFor, margin + 3, yPosition + 17);
+
+  yPosition += 35;
+
+  const colWidth = (pageWidth - 2 * margin) / 2;
+
+  doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+
+  doc.rect(margin, yPosition, colWidth, 8, 'F');
+  doc.text('PRODUIT', margin + 3, yPosition + 6);
+
+  doc.rect(margin + colWidth, yPosition, colWidth, 8, 'F');
+  doc.text('QUANTITÉ', margin + colWidth + 3, yPosition + 6);
+
+  yPosition += 8;
+
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(11);
+
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.rect(margin, yPosition, pageWidth - 2 * margin, 12);
+
+  doc.text(movement.productName, margin + 3, yPosition + 7);
+
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+  doc.text(`${movement.quantity}`, margin + colWidth + 3, yPosition + 7);
+
+  yPosition += 22;
+
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(9);
+
+  const details = [
+    `Déstocké par: ${movement.destockedBy}`,
+    `Date: ${movement.date} à ${movement.time}`,
+    `Statut: ${movement.withdrawn ? '✓ Confirmé' : 'En attente'}`,
+    ...(movement.theoreticalWithdrawalDate ? [`Date théorique retrait: ${movement.theoreticalWithdrawalDate}`] : []),
+  ];
+
+  details.forEach((detail) => {
+    doc.text(detail, margin, yPosition);
+    yPosition += 6;
+  });
+
+  yPosition += 8;
+
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+
+  const signBoxWidth = (pageWidth - 3 * margin) / 2;
+  const signBoxHeight = 28;
+  const signY = pageHeight - 50;
+
+  doc.rect(margin, signY, signBoxWidth, signBoxHeight);
+  doc.setFontSize(8);
+  doc.setFont(undefined, 'bold');
+  doc.text('Responsable Dépôt', margin + 2, signY + 4);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(7);
+  doc.text('Signature: ________________', margin + 2, signY + 10);
+  doc.text('Date: ________________', margin + 2, signY + 20);
+
+  doc.rect(margin + signBoxWidth + margin, signY, signBoxWidth, signBoxHeight);
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(8);
+  doc.text('Destinataire', margin + signBoxWidth + margin + 2, signY + 4);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(7);
+  doc.text('Signature: ________________', margin + signBoxWidth + margin + 2, signY + 10);
+  doc.text('Date: ________________', margin + signBoxWidth + margin + 2, signY + 20);
+
+  doc.setFontSize(7);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Stock Manager - Gestion de Stock', pageWidth / 2, pageHeight - 4, { align: 'center' });
+
+  return doc;
+};
 
 // Initialisation IndexedDB
 const DB_NAME = 'StockManager';
@@ -344,173 +537,61 @@ export default function StockManager() {
       window.URL.revokeObjectURL(url);
     }, 100);
   };
-  const generateBonDeSortie = (movement) => {
-    const loadImageAndGeneratePDF = async () => {
-      try {
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 15;
-
-        // Couleurs professionnelles
-        const primaryBlue = [0, 51, 102];
-        const accentOrange = [255, 102, 0];
-        const darkGray = [50, 50, 50];
-        const lightGray = [240, 240, 240];
-
-        // ===== EN-TÊTE AVEC LOGO =====
-        // Fond de couleur pour l'en-tête
-        doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
-        doc.rect(0, 0, pageWidth, 35, 'F');
-
-        // Charger et ajouter le logo
-        try {
-          const response = await fetch('/img/logo.jpg');
-          if (response.ok) {
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              try {
-                doc.addImage(e.target.result, 'JPEG', margin, 5, 25, 25);
-              } catch (err) {
-                console.warn('Impossible d\'ajouter le logo au PDF:', err);
-              }
-            };
-            reader.readAsDataURL(blob);
-          }
-        } catch (err) {
-          console.warn('Impossible de charger le logo:', err);
-        }
-
-        // Titre et numéro
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
-        doc.setFont(undefined, 'bold');
-        doc.text('BON DE SORTIE DE STOCK', margin + 32, 16);
-
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text(`N°${movement.id}`, margin + 32, 27);
-
-        // Ligne séparatrice
-        doc.setDrawColor(accentOrange[0], accentOrange[1], accentOrange[2]);
-        doc.setLineWidth(1.5);
-        doc.line(margin, 35, pageWidth - margin, 35);
-
-        let yPosition = 45;
-
-        // ===== SECTION DESTINATAIRE =====
-        doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
-
-        doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        doc.text('DESTINATAIRE', margin + 3, yPosition + 6);
-
-        doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
-        doc.setFontSize(13);
-        doc.setFont(undefined, 'bold');
-        doc.text(movement.intendedFor, margin + 3, yPosition + 17);
-
-        yPosition += 35;
-
-        // ===== TABLEAU PRODUIT =====
-        const colWidth = (pageWidth - 2 * margin) / 2;
-
-        // En-tête tableau
-        doc.setFillColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-
-        doc.rect(margin, yPosition, colWidth, 8, 'F');
-        doc.text('PRODUIT', margin + 3, yPosition + 6);
-
-        doc.rect(margin + colWidth, yPosition, colWidth, 8, 'F');
-        doc.text('QUANTITÉ', margin + colWidth + 3, yPosition + 6);
-
-        yPosition += 8;
-
-        // Ligne produit
-        doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(11);
-
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.5);
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 12);
-
-        doc.text(movement.productName, margin + 3, yPosition + 7);
-
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(14);
-        doc.setTextColor(accentOrange[0], accentOrange[1], accentOrange[2]);
-        doc.text(`${movement.quantity}`, margin + colWidth + 3, yPosition + 7);
-
-        yPosition += 22;
-
-        // ===== DÉTAILS =====
-        doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(9);
-
-        const details = [
-          `Déstocké par: ${movement.destockedBy}`,
-          `Date: ${movement.date} à ${movement.time}`,
-          `Statut: ${movement.withdrawn ? '✓ Confirmé' : 'En attente'}`,
-          ...(movement.theoreticalWithdrawalDate ? [`Date théorique retrait: ${movement.theoreticalWithdrawalDate}`] : [])
-        ];
-
-        details.forEach((detail) => {
-          doc.text(detail, margin, yPosition);
-          yPosition += 6;
-        });
-
-        yPosition += 8;
-
-        // ===== SECTION SIGNATURES =====
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.5);
-
-        const signBoxWidth = (pageWidth - 3 * margin) / 2;
-        const signBoxHeight = 28;
-        const signY = pageHeight - 50;
-
-        // Box Responsable
-        doc.rect(margin, signY, signBoxWidth, signBoxHeight);
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'bold');
-        doc.text('Responsable Dépôt', margin + 2, signY + 4);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.text('Signature: ________________', margin + 2, signY + 10);
-        doc.text('Date: ________________', margin + 2, signY + 20);
-
-        // Box Destinataire
-        doc.rect(margin + signBoxWidth + margin, signY, signBoxWidth, signBoxHeight);
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(8);
-        doc.text('Destinataire', margin + signBoxWidth + margin + 2, signY + 4);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
-        doc.text('Signature: ________________', margin + signBoxWidth + margin + 2, signY + 10);
-        doc.text('Date: ________________', margin + signBoxWidth + margin + 2, signY + 20);
-
-        // Pied de page
-        doc.setFontSize(7);
-        doc.setTextColor(120, 120, 120);
-        doc.text('Stock Manager - Gestion de Stock', pageWidth / 2, pageHeight - 4, { align: 'center' });
-
-        const timestamp = new Date().toISOString().split('T')[0];
-        doc.save(`bon_de_sortie_${movement.intendedFor}_${timestamp}.pdf`);
-      } catch (error) {
-        console.error('Erreur PDF:', error);
-        alert('Erreur génération PDF');
-      }
+  const archiveBonDeSortieToMovement = async (movement) => {
+    const archivedAt = new Date().toISOString();
+    const doc = await createBonDeSortiePdf(movement);
+    const dataUrl = doc.output('datauristring');
+    const archivedAttachment = {
+      id: `bon_de_sortie_${Date.now()}`,
+      kind: 'bon_de_sortie',
+      fileName: buildSlipFileName(movement, archivedAt),
+      mimeType: 'application/pdf',
+      archivedAt,
+      dataUrl,
     };
 
-    loadImageAndGeneratePDF();
+    return {
+      ...movement,
+      archivedAttachments: [...(movement.archivedAttachments || []), archivedAttachment],
+    };
+  };
+
+  const triggerAttachmentDownload = (attachment, openInNewTab = false) => {
+    const link = document.createElement('a');
+    link.href = attachment.dataUrl;
+    link.download = attachment.fileName;
+
+    if (openInNewTab) {
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.removeAttribute('download');
+    }
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleOpenArchivedBonDeSortie = (movement) => {
+    const archivedAttachment = getLatestArchivedSlip(movement);
+
+    if (!archivedAttachment) {
+      alert('Aucun bon de sortie archivé pour ce mouvement');
+      return;
+    }
+
+    triggerAttachmentDownload(archivedAttachment, true);
+  };
+
+  const handleDownloadArchivedBonDeSortie = (movement) => {
+    const archivedAttachment = getLatestArchivedSlip(movement);
+
+    if (!archivedAttachment) {
+      alert('Aucun bon de sortie archivé pour ce mouvement');
+      return;
+    }
+
+    triggerAttachmentDownload(archivedAttachment, false);
   };
 
   const handleSendBonDeSortieEmail = async (movement) => {
@@ -628,10 +709,10 @@ export default function StockManager() {
       let movementToSave;
 
       if (existingMovementIndex !== -1) {
-        updatedMovements = [...movements];
-        updatedMovements[existingMovementIndex] = {
-          ...updatedMovements[existingMovementIndex],
-          quantity: updatedMovements[existingMovementIndex].quantity + qty,
+        const currentMovement = movements[existingMovementIndex];
+        const updatedMovement = {
+          ...currentMovement,
+          quantity: currentMovement.quantity + qty,
           date: new Date().toLocaleDateString('fr-FR'),
           time: new Date().toLocaleTimeString('fr-FR'),
           destockedBy: movementForm.destockedBy,
@@ -640,9 +721,11 @@ export default function StockManager() {
           email: movementForm.email,
           updated: true
         };
-        movementToSave = updatedMovements[existingMovementIndex];
+        movementToSave = await archiveBonDeSortieToMovement(updatedMovement);
+        updatedMovements = [...movements];
+        updatedMovements[existingMovementIndex] = movementToSave;
       } else {
-        movementToSave = {
+        const newMovement = {
           id: Date.now(),
           productId: selectedProduct.id,
           productName: selectedProduct.name,
@@ -656,6 +739,7 @@ export default function StockManager() {
           email: movementForm.email,
           updated: false
         };
+        movementToSave = await archiveBonDeSortieToMovement(newMovement);
         updatedMovements = [...movements, movementToSave];
       }
 
@@ -693,10 +777,11 @@ export default function StockManager() {
   const handleSaveEditedMovement = async () => {
     if (!editingMovement) return;
 
-    const updatedMovements = movements.map(m => m.id === editingMovement.id ? editingMovement : m);
+    const movementToSave = await archiveBonDeSortieToMovement(editingMovement);
+    const updatedMovements = movements.map(m => m.id === editingMovement.id ? movementToSave : m);
     setMovements(updatedMovements);
     await saveToIndexedDBLocal(products, updatedMovements);
-    await saveToCouchDB(editingMovement, 'movement', editingMovement.id);
+    await saveToCouchDB(movementToSave, 'movement', movementToSave.id);
 
     setEditingMovementId(null);
     setEditingMovement(null);
@@ -1129,6 +1214,11 @@ export default function StockManager() {
             <div className="space-y-3">
               {movements.slice().reverse().map((movement) => (
                 <div key={movement.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  {(() => {
+                    const archivedSlips = getMovementArchivedSlips(movement);
+                    const latestArchivedSlip = getLatestArchivedSlip(movement);
+
+                    return (
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -1155,11 +1245,28 @@ export default function StockManager() {
                           </span>
                         </div>
                       </div>
+                      {latestArchivedSlip && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded">
+                            {archivedSlips.length} bon{archivedSlips.length > 1 ? 's' : ''} archivé{archivedSlips.length > 1 ? 's' : ''}
+                          </span>
+                          <span>
+                            Dernière archive: {new Date(latestArchivedSlip.archivedAt).toLocaleString('fr-FR')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => generateBonDeSortie(movement)} className="text-green-600 hover:text-green-700 hover:bg-green-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Générer bon de sortie">
-                        <Download className="w-5 h-5" />
-                      </button>
+                      {latestArchivedSlip && (
+                        <>
+                          <button onClick={() => handleOpenArchivedBonDeSortie(movement)} className="text-slate-600 hover:text-slate-700 hover:bg-slate-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Ouvrir le bon archivé">
+                            <FileDown className="w-5 h-5" />
+                          </button>
+                          <button onClick={() => handleDownloadArchivedBonDeSortie(movement)} className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Télécharger le bon archivé">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M3 14a1 1 0 011-1h3v-2H5a1 1 0 110-2h2V7a1 1 0 012 0v2h2a1 1 0 110 2H9v2h3a1 1 0 110 2H4a1 1 0 01-1-1zm9-9a1 1 0 10-2 0v6.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 10-1.414-1.414L12 11.586V5z"></path></svg>
+                          </button>
+                        </>
+                      )}
                       {movement.email && (
                         <button onClick={() => handleSendBonDeSortieEmail(movement)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition-colors flex-shrink-0" title="Envoyer par email">
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path></svg>
@@ -1173,6 +1280,8 @@ export default function StockManager() {
                       </button>
                     </div>
                   </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
